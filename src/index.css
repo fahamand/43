@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@import "@fontsource/vazirmatn/index.css";
+@import "@fontsource/vazirmatn/700.css";
+@import "@fontsource/vazirmatn/900.css";
+@import "@fontsource/lalezar/index.css";
+@import "@fontsource/noto-sans-arabic/index.css";
+@import "@fontsource/noto-sans-arabic/700.css";
+@import "@fontsource/amiri/index.css";
+@import "@fontsource/amiri/700.css";
+@import "@fontsource/rubik/index.css";
+@import "@fontsource/rubik/700.css";
+
+/* Fallback declarations for local and standard Iranian fonts */
+@font-face {
+  font-family: 'IRANSans';
+  font-style: normal;
+  font-weight: 400;
+  src: local('IRANSans'), local('IRANSansWeb'), local('IRAN Sans'), local('Iran Sans'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/sahel-font@v3.4.0/dist/Sahel.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yekan';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Yekan'), local('BYekan'), local('B Yekan'), local('IRANYekan'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/samim-font@v4.0.5/dist/Samim.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Traffic';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Traffic'), local('B Traffic'), local('BTraffic'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/shabnam-font@v5.0.1/dist/Shabnam.woff2') format('woff2');
+  font-display: swap;
+}
+

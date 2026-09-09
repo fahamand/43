@@ -1,0 +1,10 @@
+{
+  "name": "h-fahamand 3.1",
+  "description": "سامانه یکپارچه مدیریت مالی، صدور فاکتور خرید و فروش، اسناد روزنامه، انبارداری و کنترل صورتحساب بانکی مجهز به دستیار هوشمند جمینای",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

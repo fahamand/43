@@ -1,0 +1,49 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Route API requests starting with /api/ to api.php?route=$1
+  RewriteCond %{REQUEST_URI} ^/api/ [NC]
+  RewriteRule ^api/(.*)$ api.php?route=$1 [QSA,L]
+
+  # 2. If the requested file or directory exists on disk, serve it directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 3. Fallback all other routes to index.html for React Router routing
+  RewriteRule ^(.*)$ index.html [L]
+</IfModule>
+
+# Increase upload and post limits on Apache/cPanel hosting environments if supported
+<IfModule mod_headers.c>
+  # Disable caching for entry points so updates are instantly picked up by browsers
+  <FilesMatch "\.(html|htm|php|json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_php.c>
+  php_value upload_max_filesize 256M
+  php_value post_max_size 256M
+  php_value max_execution_time 300
+  php_value max_input_time 300
+  php_value memory_limit 256M
+</IfModule>
+<IfModule mod_php7.c>
+  php_value upload_max_filesize 256M
+  php_value post_max_size 256M
+  php_value max_execution_time 300
+  php_value max_input_time 300
+  php_value memory_limit 256M
+</IfModule>
+<IfModule mod_php8.c>
+  php_value upload_max_filesize 256M
+  php_value post_max_size 256M
+  php_value max_execution_time 300
+  php_value max_input_time 300
+  php_value memory_limit 256M
+</IfModule>
+

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>h-fahamand 3.1</title>
+    <meta name="description" content="سامانه یکپارچه مدیریت مالی، صدور فاکتور خرید و فروش، اسناد روزنامه، انبارداری و کنترل صورتحساب بانکی مجهز به دستیار هوشمند جمینای" />
+    <meta property="og:title" content="h-fahamand 3.1" />
+    <meta property="og:description" content="سامانه یکپارچه مدیریت مالی، صدور فاکتور خرید و فروش، اسناد روزنامه، انبارداری و کنترل صورتحساب بانکی مجهز به دستیار هوشمند جمینای" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Lalezar&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800;900&family=Rubik:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Vazirmatn:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/shabnam-font@v5.0.1/dist/font-face.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/sahel-font@v3.4.0/dist/font-face.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/samim-font@v4.0.5/dist/font-face.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/tanha-font@v0.10/dist/font-face.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/parastoo-font@v2.0.1/dist/font-face.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/gandom-font@v0.8/dist/font-face.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazir-font@v30.1.0/dist/font-face.css" />
+    
+    <!-- Instant Pre-Hydration Font & Theme Script to prevent FOUC and layout distortion -->
+    <script>
+      (function() {
+        try {
+          var font = localStorage.getItem('acc_app_setting_font') || 'Vazirmatn';
+          var isDark = localStorage.getItem('acc_app_darkMode') === 'true';
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          var fontStack = "'" + font + "', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Tahoma, Arial, sans-serif";
+          document.documentElement.style.setProperty('--app-font', fontStack);
+          document.documentElement.style.fontFamily = fontStack;
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Fail-Safe Watchdog to prevent Blank White Screen -->
+    <script>
+      window.__appMounted = false;
+      window.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+          var root = document.getElementById('root');
+          if (root && (!root.firstElementChild || root.innerHTML.trim() === '')) {
+            console.warn('[Watchdog] App did not mount automatically. Rendering emergency recovery view...');
+            root.innerHTML = '<div style="min-height:100vh;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Vazirmatn,system-ui,sans-serif;direction:rtl;">' +
+              '<div style="max-width:540px;width:100%;background:#1e293b;border:1px solid #334155;border-radius:24px;padding:32px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);text-align:center;">' +
+                '<div style="width:56px;height:56px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#fbbf24;font-size:24px;">⚠️</div>' +
+                '<h2 style="font-size:20px;font-weight:bold;margin:0 0 8px;color:#fff;">بازیابی و راه‌اندازی امن سیستم</h2>' +
+                '<p style="font-size:13px;color:#94a3b8;line-height:1.7;margin:0 0 24px;">بارگذاری اولیه واسط کاربری با تاخیر مواجه شد. می‌توانید با کلیک روی دکمه زیر صفحه را تازه‌سازی نمایید یا در حالت امن وارد شوید.</p>' +
+                '<div style="display:flex;flex-direction:column;gap:10px;">' +
+                  '<button onclick="window.location.reload()" style="background:#059669;color:#fff;border:none;padding:12px 20px;border-radius:12px;font-weight:bold;font-size:14px;cursor:pointer;font-family:inherit;">🔄 بارگذاری مجدد صفحه</button>' +
+                  '<button onclick="localStorage.removeItem(\'acc_active_tab\');sessionStorage.clear();window.location.reload();" style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:10px 16px;border-radius:12px;font-size:13px;cursor:pointer;font-family:inherit;">🛡️ راه‌اندازی در حالت امن (Safe Mode)</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          }
+        }, 4000);
+      });
+    </script>
+
+    <script type="module" crossorigin src="assets/index-CkX4BMne.js"></script>
+    <link rel="stylesheet" crossorigin href="assets/index-Dj40RwIp.css">
+  </head>
+  <body dir="rtl">
+    <div id="root"></div>
+  </body>
+</html>

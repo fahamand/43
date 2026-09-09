@@ -1,0 +1,15 @@
+{
+  "//_comment_1": "فایل تنظیمات اصلی و اتصال به دیتابیس متمرکز سامانه حسابداری",
+  "//_comment_2": "این فایل حاوی اطلاعات اتصال به پایگاه‌داده هاست شخصی می‌باشد.",
+
+  "DB_TYPE": "mysql",
+  "DB_HOST": "localhost",
+  "DB_PORT": 3306,
+  "DB_USER": "wdamlpty_hesabdari-h-fahamand",
+  "DB_PASSWORD": "stsE*j70[m5FlSNY",
+  "DB_NAME": "wdamlpty_hesabdari-h.fahamand",
+
+  "GEMINI_API_KEY": "",
+  "GEMINI_BASE_URL": "",
+  "PORT": 3000
+}
