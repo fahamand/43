@@ -207,7 +207,7 @@ for (const filePath of targets) {
   // 19. Define extraSideMargin state and updater
   const stateTarget = 'Xe=D=>{const T=Math.max(0,Math.round(D*10)/10);nt(T);const ce=he();localStorage.setItem(`acc_print_extra_top_margin_mm_${ce}`,String(T)),window.dispatchEvent(new CustomEvent("print-extra-top-margin-changed",{detail:{userId:ce,margin:T}}))}';
   const stateReplacement = 'Xe=D=>{const T=Math.max(0,Math.round(D*10)/10);nt(T);const ce=he();localStorage.setItem(`acc_print_extra_top_margin_mm_${ce}`,String(T)),window.dispatchEvent(new CustomEvent("print-extra-top-margin-changed",{detail:{userId:ce,margin:T}}))},[extraSideMargin,setExtraSideMargin]=v.useState(()=>{const D=(r==null?void 0:r.id)||(r==null?void 0:r.username)||"default",T=localStorage.getItem(`acc_print_extra_side_margin_mm_${D}`);if(T!==null){const ce=parseFloat(T);if(!isNaN(ce))return Math.max(0,ce)}return 0}),updatePrintExtraSideMargin=D=>{const T=Math.max(0,Math.round(D*10)/10);setExtraSideMargin(T);const ce=he();localStorage.setItem(`acc_print_extra_side_margin_mm_${ce}`,String(T)),window.dispatchEvent(new CustomEvent("print-extra-side-margin-changed",{detail:{userId:ce,margin:T}}))}';
-  if (content.includes(stateTarget)) {
+  if (content.includes(stateTarget) && !content.includes('extraSideMargin')) {
     content = content.replace(stateTarget, stateReplacement);
     console.log('  [19] Patched extraSideMargin state and updater');
   }
@@ -215,7 +215,7 @@ for (const filePath of targets) {
   // 20. Load extraSideMargin in useEffect
   const loadTarget = 'const Se=localStorage.getItem(`acc_print_extra_top_margin_mm_${D}`);nt(Se!==null&&!isNaN(parseFloat(Se))?Math.max(0,parseFloat(Se)):0);';
   const loadReplacement = 'const Se=localStorage.getItem(`acc_print_extra_top_margin_mm_${D}`);nt(Se!==null&&!isNaN(parseFloat(Se))?Math.max(0,parseFloat(Se)):0);const Se_side=localStorage.getItem(`acc_print_extra_side_margin_mm_${D}`);setExtraSideMargin(Se_side!==null&&!isNaN(parseFloat(Se_side))?Math.max(0,parseFloat(Se_side)):0);';
-  if (content.includes(loadTarget)) {
+  if (content.includes(loadTarget) && !content.includes('Se_side')) {
     content = content.replace(loadTarget, loadReplacement);
     console.log('  [20] Patched extraSideMargin loader in useEffect');
   }
@@ -223,7 +223,7 @@ for (const filePath of targets) {
   // 21. Add extraSideMargin to CSS print styles
   const cssTarget = 'padding-top: calc(${Se} + ${et}mm) !important;';
   const cssReplacement = 'padding-top: calc(${Se} + ${et}mm) !important;        padding-left: calc(${Se} + ${extraSideMargin}mm) !important;        padding-right: calc(${Se} + ${extraSideMargin}mm) !important;';
-  if (content.includes(cssTarget)) {
+  if (content.includes(cssTarget) && !content.includes('extraSideMargin}mm')) {
     content = content.replace(cssTarget, cssReplacement);
     console.log('  [21] Patched CSS side padding inside printable-area');
   }
@@ -231,7 +231,7 @@ for (const filePath of targets) {
   // 22. Add extraSideMargin UI Controls to normal print modal
   const ui1TargetPrefix = 't.jsxDEV("div",{className:"flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 text-emerald-900 text-xs font-bold",title:"تنظیم حاشیه بالای صفحه در چاپ"';
   const ui1Idx = content.indexOf(ui1TargetPrefix);
-  if (ui1Idx !== -1) {
+  if (ui1Idx !== -1 && !content.includes('فاصله چپ/راست چاپ')) {
     const ui1EndSuffix = 'lineNumber:7264,columnNumber:15},this)';
     const ui1EndIdx = content.indexOf(ui1EndSuffix, ui1Idx);
     if (ui1EndIdx !== -1) {
@@ -254,7 +254,7 @@ for (const filePath of targets) {
   // 23. Add extraSideMargin UI Controls to live preview / dark modal
   const ui2TargetPrefix = 't.jsxDEV("div",{className:"flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-lg px-2 py-0.5 text-emerald-900 dark:text-emerald-200 text-xs font-bold no-print",title:"تنظیم حاشیه بالای صفحه در چاپ"';
   const ui2Idx = content.indexOf(ui2TargetPrefix);
-  if (ui2Idx !== -1) {
+  if (ui2Idx !== -1 && !content.includes('rotate-90"},void 0,!1,{fileName:"/app/applet/src/components/InvoiceManager.tsx",lineNumber:7912')) {
     const ui2EndSuffix = 'lineNumber:7765,columnNumber:15},this)';
     const ui2EndIdx = content.indexOf(ui2EndSuffix, ui2Idx);
     if (ui2EndIdx !== -1) {
@@ -304,6 +304,255 @@ for (const filePath of targets) {
     console.log('  [26] (saveKeyData items restriction already removed or target not found)');
   }
 
+  // 27. Fix manual transaction submission in settlement / receivableSettlement (prevent double counting and align payment allocation fields)
+  const bsmSettleTarget = 'const dn=ls.type==="sale",{updatedInvoices:Kl,allocations:Ti}=Fse(p,ls.counterpartId||"",dn?"sale":"purchase",oe,X,"bank_transfer",Jr.id);d(Kl),Ti.forEach(El=>{Lse({invoiceId:El.invoiceId,allocations:[{id:`alloc-${Date.now()}-${Math.random().toString(36).substring(2,6)}`,date:El.date,amount:El.amount,method:El.method,reference:El.reference,status:"cleared",clearedTxId:Jr.id,clearedDate:X}]}).catch(()=>{})})';
+  const bsmSettleReplacement = 'const dn=ls.type==="sale",{updatedInvoices:Kl,allocations:Ti}=Fse(p,ls.counterpartId||"",dn?"sale":"purchase",oe,X,"bank_transfer",Jr.id,g,Tr,la||void 0);d(Kl),Ti.forEach(El=>{Lse({invoiceId:El.invoiceId,allocations:[{id:`alloc-${Date.now()}-${Math.random().toString(36).substring(2,6)}`,paymentId:Jr.id,invoiceId:El.invoiceId,invoiceNumber:El.invoiceNumber,counterpartId:ls.counterpartId||"",counterpartName:ls.counterpartName||"",allocatedAmount:Number(El.amount)||0,allocationDate:El.date||X,paymentMethod:El.method||"bank_transfer",reference:El.reference,status:"valid",clearedTxId:Jr.id,clearedDate:X}]}).catch(()=>{})})';
+  if (content.includes(bsmSettleTarget)) {
+    content = content.replace(bsmSettleTarget, bsmSettleReplacement);
+    console.log('  [27] Patched manual settlement payment allocation parameters and fields successfully.');
+  } else {
+    console.log('  [27] (already patched or target not found)');
+  }
+
+  // 28. Fix allocatePaymentToInvoices function (Fse) to handle pending deposits properly and prevent double subtraction
+  const fseTarget = 'function Fse(e,a,s,r,l,i="bank_transfer",m){let p=Number(r)||0;const d=[],f=(e||[]).filter(N=>(!a||N.counterpartId===a)&&N.type===s).sort((N,g)=>N.date.localeCompare(g.date)),A=new Map;for(const N of f){if(p<=0)break;const g=Number(N.totalAmount)||0,y=Number(N.deposit)||0,w=Math.max(0,g-y);if(w>0){const C=Math.min(p,w);p-=C;const V=y+C;d.push({invoiceId:N.id,invoiceNumber:N.invoiceNumber,amount:C,date:l,method:i,reference:m}),A.set(N.id,{...N,deposit:V})}}if(p>0&&f.length>0){const N=f[f.length-1],g=A.get(N.id)||N,y=(g.deposit||0)+p;d.push({invoiceId:N.id,invoiceNumber:N.invoiceNumber,amount:p,date:l,method:i,reference:m}),A.set(N.id,{...g,deposit:y})}return{updatedInvoices:(e||[]).map(N=>A.get(N.id)||N),allocations:d}}';
+  const fseReplacement = 'function Fse(e,a,s,r,l,i="bank_transfer",m,h,u,k){let p=Number(r)||0;const d=[];const normNum=st=>String(st||"").replace(/[۰-۹]/g,dx=>"۰۱۲۳۴۵۶۷۸۹".indexOf(dx).toString()).replace(/[٠-٩]/g,dx=>"٠١٢٣٤٥٦٧٨٩".indexOf(dx).toString()).trim().toLowerCase();let f=(e||[]).filter(N=>(!a||N.counterpartId===a)&&N.type===s).sort((N,g)=>N.date.localeCompare(g.date));if(u&&u.length>0){const sSet=new Set(u.map(String));const sel=f.filter(N=>sSet.has(String(N.id)));const unsel=f.filter(N=>!sSet.has(String(N.id)));f=[...sel,...unsel]}else if(k&&h){const pd=h.find(N=>N.id===k);if(pd){const pdInv=f.find(N=>N.id===pd.invoiceId||normNum(N.invoiceNumber)===normNum(pd.invoiceNumber));if(pdInv){f=[pdInv,...f.filter(N=>N.id!==pdInv.id)]}}}const A=new Map;for(const N of f){if(p<=0)break;const g=Number(N.totalAmount)||0,y=Number(N.deposit)||0;const matchingPds=(h||[]).filter(pd=>!pd.isDeleted&&(pd.invoiceId===N.id||normNum(pd.invoiceNumber)===normNum(pd.invoiceNumber)));const openPds=matchingPds.filter(pd=>pd.status==="pending");const clearedPds=matchingPds.filter(pd=>pd.status==="cleared");const openPdSum=openPds.reduce((sum,pd)=>sum+(Number(pd.amount)||0),0);const clearedPdSum=clearedPds.reduce((sum,pd)=>sum+(Number(pd.amount)||0),0);const cleanDeposit=(clearedPdSum>0&&y===clearedPdSum*2&&(!N.paymentSlips||N.paymentSlips.length<=1))?clearedPdSum:y;const w=Math.max(0,g-cleanDeposit);if(w>0||openPdSum>0){const maxAlloc=w>0?w:openPdSum;const C=Math.min(p,maxAlloc);p-=C;const covPd=Math.min(C,openPdSum);const addPay=Math.max(0,C-covPd);const V=Math.max(cleanDeposit,covPd)+addPay;d.push({invoiceId:N.id,invoiceNumber:N.invoiceNumber,amount:C,date:l,method:i,reference:m}),A.set(N.id,{...N,deposit:V})}}if(p>0&&f.length>0){const N=f[f.length-1],g=A.get(N.id)||N,y=(g.deposit||0)+p;d.push({invoiceId:N.id,invoiceNumber:N.invoiceNumber,amount:p,date:l,method:i,reference:m}),A.set(N.id,{...g,deposit:y})}return{updatedInvoices:(e||[]).map(N=>A.get(N.id)||N),allocations:d}}';
+  if (content.includes(fseTarget)) {
+    content = content.replace(fseTarget, fseReplacement);
+    console.log('  [28] Patched allocatePaymentToInvoices (Fse) logic successfully.');
+  } else {
+    console.log('  [28] (already patched or target not found)');
+  }
+
+  // 29. Fix LT function (getInvoicePaidAmount) to exclude pending deposits from invoice.deposit
+  const ltTarget = 'function LT(e,a){let s=Math.max(0,Number(e.deposit)||0);if(a&&a.length>0){const r=a.filter(l=>l.invoiceId===e.id&&l.status!=="reversed").reduce((l,i)=>l+(Number(i.allocatedAmount)||0),0);r>s&&(s=r)}return s}';
+  const ltReplacement = 'function LT(e,a){let s=Math.max(0,Number(e.deposit)||0);const pds=window.__pendingDeposits||[];const pendingSum=pds.filter(pd=>!pd.isDeleted&&pd.invoiceId===e.id&&pd.status==="pending").reduce((sum,pd)=>sum+(Number(pd.amount)||0),0);s=Math.max(0,s-pendingSum);if(a&&a.length>0){const r=a.filter(l=>l.invoiceId===e.id&&l.status!=="reversed").reduce((l,i)=>l+(Number(i.allocatedAmount)||0),0);r>s&&(s=r)}return s}';
+  if (content.includes(ltTarget)) {
+    content = content.replace(ltTarget, ltReplacement);
+    console.log('  [29] Patched paidAmount calculator (LT) to correctly subtract pending deposits.');
+  } else {
+    console.log('  [29] (LT already patched or target not found)');
+  }
+
+  // 30. Fix commission settings aggressive local storage purge (prevent deleting active commission keys)
+  const purgeOld = 'if(typeof window<"u")try{localStorage.removeItem("category_quantity_commission_rules"),localStorage.removeItem("commission_tags_list"),localStorage.removeItem("commission_settlements_list"),localStorage.removeItem("global_fixed_invoice_comm"),localStorage.removeItem("urgent_fixed_invoice_comm"),localStorage.removeItem("emergency_fixed_invoice_comm"),localStorage.removeItem("fixed_invoice_commissions"),localStorage.removeItem("shipping_method_fixed_commissions"),localStorage.removeItem("acc_app_invoices"),localStorage.removeItem("acc_app_users"),localStorage.removeItem("acc_app_items"),ji()}catch{}';
+  const purgeNew = 'if(typeof window<"u")try{localStorage.removeItem("acc_app_invoices"),localStorage.removeItem("acc_app_users"),localStorage.removeItem("acc_app_items"),ji()}catch{}';
+  if (content.includes(purgeOld)) {
+    content = content.replace(purgeOld, purgeNew);
+    console.log('  [30] Removed aggressive commission local storage purges successfully.');
+  } else {
+    console.log('  [30] (Purge old string not found or already patched)');
+  }
+
+  // 31. Guard commission database saves with window.__commissionsLoaded initialization flag
+  const asyncOld = '(async()=>{try{const at=["category_quantity_commission_rules","commission_tags_list","commission_settlements_list","global_fixed_invoice_comm","urgent_fixed_invoice_comm","emergency_fixed_invoice_comm","fixed_invoice_commissions","shipping_method_fixed_commissions","warehouse_categories_list"];for(const Et of at){const ma=await fetch(`/api/db/load-key?key=${encodeURIComponent(Et)}`);if(ma.ok){const Aa=await ma.json();if(Aa&&Aa.status==="success"&&Aa.data!==void 0&&Aa.data!==null){const ta=Aa.data;Et==="category_quantity_commission_rules"&&Array.isArray(ta)?b(ta):Et==="commission_tags_list"&&Array.isArray(ta)?g(ta):Et==="commission_settlements_list"&&Array.isArray(ta)?w(ta):Et==="global_fixed_invoice_comm"?V(String(ta)):Et==="urgent_fixed_invoice_comm"?S(String(ta)):Et==="emergency_fixed_invoice_comm"?Q(String(ta)):Et==="fixed_invoice_commissions"&&typeof ta=="object"?F(ta):Et==="shipping_method_fixed_commissions"&&typeof ta=="object"?q(ta):Et==="warehouse_categories_list"&&Array.isArray(ta)&&d(ta)}}}}catch(at){console.warn("Failed to load commission settings from MySQL:",at)}})()';
+  const asyncNew = '(()=>{window.__commissionsLoaded=!1;(async()=>{try{const at=["category_quantity_commission_rules","commission_tags_list","commission_settlements_list","global_fixed_invoice_comm","urgent_fixed_invoice_comm","emergency_fixed_invoice_comm","fixed_invoice_commissions","shipping_method_fixed_commissions","warehouse_categories_list"];for(const Et of at){const ma=await fetch(`/api/db/load-key?key=${encodeURIComponent(Et)}`);if(ma.ok){const Aa=await ma.json();if(Aa&&Aa.status==="success"&&Aa.data!==void 0&&Aa.data!==null){const ta=Aa.data;Et==="category_quantity_commission_rules"&&Array.isArray(ta)?b(ta):Et==="commission_tags_list"&&Array.isArray(ta)?g(ta):Et==="commission_settlements_list"&&Array.isArray(ta)?w(ta):Et==="global_fixed_invoice_comm"?V(String(ta)):Et==="urgent_fixed_invoice_comm"?S(String(ta)):Et==="emergency_fixed_invoice_comm"?Q(String(ta)):Et==="fixed_invoice_commissions"&&typeof ta=="object"?F(ta):Et==="shipping_method_fixed_commissions"&&typeof ta=="object"?q(ta):Et==="warehouse_categories_list"&&Array.isArray(ta)&&d(ta)}}}}catch(at){console.warn("Failed to load commission settings from MySQL:",at)}finally{window.__commissionsLoaded=!0}})()})()';
+  if (content.includes(asyncOld)) {
+    content = content.replace(asyncOld, asyncNew);
+    console.log('  [31.1] Wrapped loadCommissionKeys with __commissionsLoaded tracker.');
+  } else {
+    console.log('  [31.1] (loadCommissionKeys wrapper already patched or target not found)');
+  }
+
+  const saveHooksOld = 'v.useEffect(()=>{Ma("commission_tags_list",N)},[N]),v.useEffect(()=>{Ma("commission_settlements_list",y)},[y]),v.useEffect(()=>{Ma("global_fixed_invoice_comm",C)},[C]),v.useEffect(()=>{Ma("urgent_fixed_invoice_comm",M)},[M]),v.useEffect(()=>{Ma("emergency_fixed_invoice_comm",R)},[R]),v.useEffect(()=>{Ma("fixed_invoice_commissions",I)},[I])';
+  const saveHooksNew = 'v.useEffect(()=>{window.__commissionsLoaded&&Ma("commission_tags_list",N)},[N]),v.useEffect(()=>{window.__commissionsLoaded&&Ma("commission_settlements_list",y)},[y]),v.useEffect(()=>{window.__commissionsLoaded&&Ma("global_fixed_invoice_comm",C)},[C]),v.useEffect(()=>{window.__commissionsLoaded&&Ma("urgent_fixed_invoice_comm",M)},[M]),v.useEffect(()=>{window.__commissionsLoaded&&Ma("emergency_fixed_invoice_comm",R)},[R]),v.useEffect(()=>{window.__commissionsLoaded&&Ma("fixed_invoice_commissions",I)},[I])';
+  if (content.includes(saveHooksOld)) {
+    content = content.replace(saveHooksOld, saveHooksNew);
+    console.log('  [31.2] Guarded save hooks with __commissionsLoaded successfully.');
+  } else {
+    console.log('  [31.2] (Save hooks already guarded or target not found)');
+  }
+
+  const shipSaveOld = 'v.useEffect(()=>{Ma("shipping_method_fixed_commissions",W)},[W])';
+  const shipSaveNew = 'v.useEffect(()=>{window.__commissionsLoaded&&Ma("shipping_method_fixed_commissions",W)},[W])';
+  if (content.includes(shipSaveOld)) {
+    content = content.replace(shipSaveOld, shipSaveNew);
+    console.log('  [31.3] Guarded shipping method commission save with __commissionsLoaded successfully.');
+  } else {
+    console.log('  [31.3] (Shipping save already guarded or target not found)');
+  }
+
+  // 33. Fetch and sync commission_tags_list inside InvoiceManager's loading phase to ensure tags are always up-to-date on Invoice tab load
+  const loadRulesOld = 'const Ae=await fetch("/api/db/load-key?key=category_quantity_commission_rules");if(Ae.ok){const we=await Ae.json();we&&we.status==="success"&&Array.isArray(we.data)&&Oe(we.data)}';
+  const loadRulesNew = 'const Ae=await fetch("/api/db/load-key?key=category_quantity_commission_rules");if(Ae.ok){const we=await Ae.json();we&&we.status==="success"&&Array.isArray(we.data)&&Oe(we.data)}try{const ct=await fetch("/api/db/load-key?key=commission_tags_list");if(ct.ok){const we=await ct.json();we&&we.status==="success"&&Array.isArray(we.data)&&localStorage.setItem("commission_tags_list",JSON.stringify(we.data))}}catch(e){}';
+  if (content.includes(loadRulesOld)) {
+    content = content.replace(loadRulesOld, loadRulesNew);
+    console.log('  [33] Added commission_tags_list fetch to InvoiceManager loading flow successfully.');
+  } else {
+    console.log('  [33] (commission_tags_list fetch already added or target not found)');
+  }
+
+  // 32. Render tag picker selection popup modal conditionally when be !== null
+  const tagModalJsx = `be !== null && t.jsxDEV("div", {
+    style: { backgroundColor: "var(--popup-overlay-bg)" },
+    className: "fixed inset-0 flex items-center justify-center p-4 z-[100] animate-fade-in popup-overlay-global",
+    id: "dialog-tag-picker",
+    dir: "rtl",
+    children: t.jsxDEV("div", {
+      style: {
+        backgroundColor: "var(--popup-bg)",
+        borderRadius: "var(--popup-radius)",
+        boxShadow: "var(--popup-shadow)",
+        color: "var(--popup-text)",
+        borderColor: "var(--popup-border)"
+      },
+      className: "rounded-2xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-scale-up border border-slate-100 dark:border-slate-800 text-right space-y-4 popup-box-global",
+      children: [
+        t.jsxDEV("div", {
+          className: "flex items-center justify-between gap-2.5 font-bold border-b border-slate-100 dark:border-slate-800 pb-3",
+          children: [
+            t.jsxDEV("div", {
+              className: "flex items-center gap-2 text-amber-600 dark:text-amber-400",
+              children: [
+                t.jsxDEV("span", { className: "text-lg shrink-0", children: "🏷️" }),
+                t.jsxDEV("h4", { className: "text-md font-extrabold", children: "انتخاب برچسب‌های پورسانت" })
+              ]
+            }),
+            t.jsxDEV("button", {
+              type: "button",
+              onClick: () => ke(null),
+              className: "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold text-lg cursor-pointer",
+              children: "✕"
+            })
+          ]
+        }),
+        t.jsxDEV("div", {
+          className: "space-y-2.5 max-h-[220px] overflow-y-auto pr-1",
+          children: (() => {
+            let savedTags = [];
+            try {
+              const raw = localStorage.getItem('commission_tags_list');
+              if (raw) savedTags = JSON.parse(raw);
+            } catch (e) {}
+            if (savedTags.length === 0) {
+              return t.jsxDEV("div", { className: "text-xs text-slate-400 text-center py-4", children: "هیچ تگ پورسانتی تعریف نشده است" });
+            }
+            return savedTags.map((tag) => {
+              const isChecked = xe.includes(tag.name);
+              return t.jsxDEV("label", {
+                className: "flex items-start gap-3 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 cursor-pointer transition-colors",
+                children: [
+                  t.jsxDEV("input", {
+                    type: "checkbox",
+                    checked: isChecked,
+                    onChange: () => {
+                      if (isChecked) {
+                        Ve(xe.filter(n => n !== tag.name));
+                      } else {
+                        Ve([...xe, tag.name]);
+                      }
+                    },
+                    className: "mt-1 w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                  }),
+                  t.jsxDEV("div", {
+                    className: "flex-1 text-xs",
+                    children: [
+                      t.jsxDEV("div", {
+                        className: "flex items-center justify-between gap-1.5 font-bold text-slate-800 dark:text-slate-100",
+                        children: [
+                          t.jsxDEV("span", { children: tag.name }),
+                          t.jsxDEV("span", {
+                            className: "text-[10px] bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-mono font-extrabold border border-amber-100 dark:border-amber-900/40",
+                            children: tag.type === 'percent' ? tag.value + "٪" : tag.value.toLocaleString() + " تومان"
+                          })
+                        ]
+                      }),
+                      tag.description && t.jsxDEV("div", {
+                        className: "text-[10px] text-slate-500 dark:text-slate-400 mt-1",
+                        children: tag.description
+                      })
+                    ]
+                  })
+                ]
+              }, tag.id);
+            });
+          })()
+        }),
+        t.jsxDEV("div", {
+          className: "space-y-1.5",
+          children: [
+            t.jsxDEV("label", { className: "text-xs font-bold text-slate-700 dark:text-slate-300", children: "توضیحات تکمیلی ردیف:" }),
+            t.jsxDEV("textarea", {
+              value: (() => {
+                const currentRow = Ae[be];
+                if (!currentRow) return '';
+                let savedTags = [];
+                try {
+                  const raw = localStorage.getItem('commission_tags_list');
+                  if (raw) savedTags = JSON.parse(raw);
+                } catch (e) {}
+                let remText = currentRow.remarks || '';
+                savedTags.forEach(t => {
+                  if (t.name) {
+                    remText = remText.replace("[" + t.name + "]", '').replace(t.name, '');
+                  }
+                });
+                return remText.trimStart();
+              })(),
+              onChange: (e) => {
+                const currentRow = Ae[be];
+                if (!currentRow) return;
+                const newFreeText = e.target.value;
+                const activeTagNames = xe.map(name => "[" + name + "]");
+                const combined = [...activeTagNames, newFreeText].filter(Boolean).join(' ');
+                Sc(be, 'remarks', combined);
+              },
+              rows: 2,
+              placeholder: "توضیحات و یادداشت‌های این ردیف کالا...",
+              className: "w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            })
+          ]
+        }),
+        t.jsxDEV("div", {
+          className: "flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800",
+          children: [
+            t.jsxDEV("button", {
+              type: "button",
+              onClick: () => ke(null),
+              className: "px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors",
+              children: "انصراف"
+            }),
+            t.jsxDEV("button", {
+              type: "button",
+              onClick: () => {
+                const currentRow = Ae[be];
+                if (currentRow) {
+                  let savedTags = [];
+                  try {
+                    const raw = localStorage.getItem('commission_tags_list');
+                    if (raw) savedTags = JSON.parse(raw);
+                  } catch (e) {}
+                  let remText = currentRow.remarks || '';
+                  savedTags.forEach(t => {
+                    if (t.name) {
+                      remText = remText.replace("[" + t.name + "]", '').replace(t.name, '');
+                    }
+                  });
+                  const freeText = remText.trim();
+                  const formattedTags = xe.map(name => "[" + name + "]").join(' ');
+                  const combinedRemarks = [formattedTags, freeText].filter(Boolean).join(' ');
+                  Sc(be, 'remarks', combinedRemarks);
+                }
+                ke(null);
+              },
+              className: "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm",
+              children: "اعمال برچسب‌ها"
+            })
+          ]
+        })
+      ]
+    })
+  })`;
+
+  const modalAnchor = 'lineNumber:7346,columnNumber:9},this),ms&&Oa&&t.jsxDEV("div"';
+  const modalReplacement = 'lineNumber:7346,columnNumber:9},this),' + tagModalJsx + ',ms&&Oa&&t.jsxDEV("div"';
+  if (content.includes(modalAnchor)) {
+    content = content.replace(modalAnchor, modalReplacement);
+    console.log('  [32] Patched tag selection modal popup successfully.');
+  } else {
+    console.log('  [32] (Tag selection modal anchor already replaced or not found)');
+  }
+
   // Validate syntax
   try {
     new (require('vm').Script)(content);
@@ -321,3 +570,16 @@ for (const filePath of targets) {
 }
 
 console.log('\nAll bundle files patched and validated successfully.');
+
+// Automatically create fresh dist.zip using AdmZip AFTER patching is complete
+try {
+  const AdmZip = require('adm-zip');
+  const zip = new AdmZip();
+  zip.addLocalFolder(path.join(__dirname, '../dist'));
+  const zipDest = path.join(__dirname, '../dist.zip');
+  zip.writeZip(zipDest);
+  console.log(`📦 [Packaging] Generated patched fresh ${zipDest} successfully.`);
+} catch (zipErr) {
+  console.warn('⚠️ [Packaging] Could not create dist.zip via AdmZip:', zipErr);
+}
+

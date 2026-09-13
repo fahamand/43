@@ -4553,7 +4553,7 @@ async function startServer() {
   });
 
   // 3. Single Key Fetcher
-  app.get("/api/db/key", async (req, res) => {
+  app.get(["/api/db/key", "/api/db/load-key"], async (req, res) => {
     try {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       res.setHeader("Pragma", "no-cache");

@@ -299,6 +299,12 @@ export default function InvoiceManager({
   const printSellerAddress = getStoredSellerAddress();
   const printSellerPhone = getStoredSellerPhone();
 
+  useEffect(() => {
+    if (pendingDeposits) {
+      (window as any).__pendingDeposits = pendingDeposits;
+    }
+  }, [pendingDeposits]);
+
   const [showForm, setShowForm] = useState(initialShowForm || false);
 
   // New Invoice Form Theme Preference States (Independent of global system theme)
@@ -326,6 +332,38 @@ export default function InvoiceManager({
   const [isPaletteExpanded, setIsPaletteExpanded] = useState<boolean>(false);
   const [tagModalRowIdx, setTagModalRowIdx] = useState<number | null>(null);
   const [selectedModalTagNames, setSelectedModalTagNames] = useState<string[]>([]);
+  const [commissionTags, setCommissionTags] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem('commission_tags_list');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((t: any) => t.id !== '1' && t.id !== '2' && t.name !== 'پورسانت ویژه کالای پرفروش' && t.name !== 'پاداش نقدی فروش');
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  // Dynamically load the latest commission tags from the MySQL server whenever the component mounts or the modal is opened
+  useEffect(() => {
+    const fetchLatestCommissionTags = async () => {
+      try {
+        const res = await fetch('/api/db/load-key?key=commission_tags_list');
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData && resData.status === 'success' && Array.isArray(resData.data)) {
+            const cleaned = resData.data.filter((t: any) => t.id !== '1' && t.id !== '2' && t.name !== 'پورسانت ویژه کالای پرفروش' && t.name !== 'پاداش نقدی فروش');
+            setCommissionTags(cleaned);
+            localStorage.setItem('commission_tags_list', JSON.stringify(cleaned));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load latest commission tags inside InvoiceManager:', err);
+      }
+    };
+    fetchLatestCommissionTags();
+  }, [tagModalRowIdx]);
 
   const selectSpecificTheme = (index: number) => {
     setInvoiceThemeMode(index.toString());
@@ -5304,17 +5342,7 @@ export default function InvoiceManager({
                               
                               {/* Render attached tag chips */}
                               {(() => {
-                                let savedTags: any[] = [];
-                                try {
-                                  const raw = localStorage.getItem('commission_tags_list');
-                                  if (raw) savedTags = JSON.parse(raw);
-                                } catch (e) {}
-                                if (savedTags.length === 0) {
-                                  savedTags = [
-                                    { id: '1', name: 'ثبتبیاست  کالا ثبتاین' },
-                                    { id: '2', name: 'پیش‌پرداختاین  این' }
-                                  ];
-                                }
+                                const savedTags = commissionTags;
 
                                 const currentRemarks = row.remarks || '';
                                 const matchedTags = savedTags.filter(t => t.name && currentRemarks.includes(t.name));
@@ -5351,11 +5379,7 @@ export default function InvoiceManager({
                                 id={`remarks-${idx}`}
                                 autoComplete="off"
                                 value={(() => {
-                                  let savedTags: any[] = [];
-                                  try {
-                                    const raw = localStorage.getItem('commission_tags_list');
-                                    if (raw) savedTags = JSON.parse(raw);
-                                  } catch (e) {}
+                                  const savedTags = commissionTags;
                                   let remText = row.remarks || '';
                                   savedTags.forEach(t => {
                                     if (t.name) {
@@ -5365,11 +5389,7 @@ export default function InvoiceManager({
                                   return remText.trimStart();
                                 })()}
                                 onChange={(e) => {
-                                  let savedTags: any[] = [];
-                                  try {
-                                    const raw = localStorage.getItem('commission_tags_list');
-                                    if (raw) savedTags = JSON.parse(raw);
-                                  } catch (e) {}
+                                  const savedTags = commissionTags;
                                   const currentRemarks = row.remarks || '';
                                   const activeTagNames = savedTags.filter(t => t.name && currentRemarks.includes(t.name)).map(t => `[${t.name}]`);
                                   const newFreeText = e.target.value;
@@ -5393,11 +5413,7 @@ export default function InvoiceManager({
                                   }
                                 }}
                                 placeholder={(() => {
-                                  let savedTags: any[] = [];
-                                  try {
-                                    const raw = localStorage.getItem('commission_tags_list');
-                                    if (raw) savedTags = JSON.parse(raw);
-                                  } catch (e) {}
+                                  const savedTags = commissionTags;
                                   const currentRemarks = row.remarks || '';
                                   const hasTags = savedTags.some(t => t.name && currentRemarks.includes(t.name));
                                   return hasTags ? "توضیحات و برچسب‌ها..." : "توضیحات...";
@@ -5410,17 +5426,7 @@ export default function InvoiceManager({
                                 type="button"
                                 onClick={() => {
                                   setTagModalRowIdx(idx);
-                                  let savedTags: any[] = [];
-                                  try {
-                                    const raw = localStorage.getItem('commission_tags_list');
-                                    if (raw) savedTags = JSON.parse(raw);
-                                  } catch (e) {}
-                                  if (savedTags.length === 0) {
-                                    savedTags = [
-                                      { id: '1', name: 'ثبتبیاست  کالا ثبتاین' },
-                                      { id: '2', name: 'پیش‌پرداختاین  این' }
-                                    ];
-                                  }
+                                  const savedTags = commissionTags;
                                   const currentRemarks = row.remarks || '';
                                   const currentlySelected = savedTags.filter(t => t.name && currentRemarks.includes(t.name)).map(t => t.name);
                                   setSelectedModalTagNames(currentlySelected);
@@ -7471,6 +7477,137 @@ export default function InvoiceManager({
                 id="btn-close-deposit-error"
               >
                 متوجه شدم
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tag Selection Popup Dialog Modal */}
+      {tagModalRowIdx !== null && (
+        <div style={{ backgroundColor: "var(--popup-overlay-bg)" }} className="fixed inset-0 flex items-center justify-center p-4 z-[100] animate-fade-in popup-overlay-global" id="dialog-tag-picker" dir="rtl">
+          <div style={{ backgroundColor: "var(--popup-bg)", borderRadius: "var(--popup-radius)", boxShadow: "var(--popup-shadow)", color: "var(--popup-text)", borderColor: "var(--popup-border)" }} className="rounded-2xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-scale-up border border-slate-100 dark:border-slate-800 text-right space-y-4 popup-box-global">
+            <div className="flex items-center justify-between gap-2.5 font-bold border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <Tag className="w-5 h-5 shrink-0" />
+                <h4 className="text-md font-extrabold">انتخاب برچسب‌های پورسانت</h4>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setTagModalRowIdx(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Tag List */}
+            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+              {(() => {
+                const savedTags = commissionTags;
+                if (savedTags.length === 0) {
+                  return (
+                    <div className="text-xs text-slate-400 text-center py-4 font-medium">
+                      هیچ تگ پورسانتی تعریف نشده است
+                    </div>
+                  );
+                }
+                return savedTags.map((tag) => {
+                  const isChecked = selectedModalTagNames.includes(tag.name);
+                  return (
+                    <label key={tag.id} className="flex items-start gap-3 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            setSelectedModalTagNames(selectedModalTagNames.filter(n => n !== tag.name));
+                          } else {
+                            setSelectedModalTagNames([...selectedModalTagNames, tag.name]);
+                          }
+                        }}
+                        className="mt-1 w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <div className="flex-1 text-xs">
+                        <div className="flex items-center justify-between gap-1.5 font-bold text-slate-800 dark:text-slate-100">
+                          <span>{tag.name}</span>
+                          <span className="text-[10px] bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-mono font-extrabold border border-amber-100 dark:border-amber-900/40">
+                            {tag.type === 'percent' ? `${tag.value}٪` : `${formatCurrency(tag.value)} تومان`}
+                          </span>
+                        </div>
+                        {tag.description && (
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                            {tag.description}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Custom Notes / Free text */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">توضیحات تکمیلی ردیف:</label>
+              <textarea
+                value={(() => {
+                  const currentRow = gridRows[tagModalRowIdx];
+                  if (!currentRow) return '';
+                  const savedTags = commissionTags;
+                  let remText = currentRow.remarks || '';
+                  savedTags.forEach(t => {
+                    if (t.name) {
+                      remText = remText.replace(`[${t.name}]`, '').replace(t.name, '');
+                    }
+                  });
+                  return remText.trimStart();
+                })()}
+                onChange={(e) => {
+                  const currentRow = gridRows[tagModalRowIdx];
+                  if (!currentRow) return;
+                  const newFreeText = e.target.value;
+                  const activeTagNames = selectedModalTagNames.map(name => `[${name}]`);
+                  const combined = [...activeTagNames, newFreeText].filter(Boolean).join(' ');
+                  updateRowField(tagModalRowIdx, 'remarks', combined);
+                }}
+                rows={2}
+                placeholder="توضیحات و یادداشت‌های این ردیف کالا..."
+                className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
+            </div>
+
+            {/* Footer buttons */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setTagModalRowIdx(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentRow = gridRows[tagModalRowIdx];
+                  if (currentRow) {
+                    const savedTags = commissionTags;
+                    let remText = currentRow.remarks || '';
+                    savedTags.forEach(t => {
+                      if (t.name) {
+                        remText = remText.replace(`[${t.name}]`, '').replace(t.name, '');
+                      }
+                    });
+                    const freeText = remText.trim();
+                    const formattedTags = selectedModalTagNames.map(name => `[${name}]`).join(' ');
+                    const combinedRemarks = [formattedTags, freeText].filter(Boolean).join(' ');
+                    updateRowField(tagModalRowIdx, 'remarks', combinedRemarks);
+                  }
+                  setTagModalRowIdx(null);
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+              >
+                اعمال برچسب‌ها
               </button>
             </div>
           </div>

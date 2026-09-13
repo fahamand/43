@@ -88,48 +88,91 @@ export default function CommissionReport({
   }, [propsItems]);
 
   // Category Quantity Commission Rules
-  const [categoryQuantityRules, setCategoryQuantityRules] = useState<any[]>([]);
+  const [categoryQuantityRules, setCategoryQuantityRules] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem('category_quantity_commission_rules');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
 
   // Commission Tags State
-  const [tags, setTags] = useState<CommissionTag[]>([
-    { id: '1', name: 'پورسانت ویژه کالای پرفروش', type: 'percent', value: 3, description: 'افزودن ۳٪ پورسانت تشویقی' },
-    { id: '2', name: 'پاداش نقدی فروش', type: 'fixed', value: 50000, description: '۵۰,۰۰۰ تومان پاداش روی هر عدد' }
-  ]);
+  const [tags, setTags] = useState<CommissionTag[]>(() => {
+    try {
+      const raw = localStorage.getItem('commission_tags_list');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((t: any) => t.id !== '1' && t.id !== '2' && t.name !== 'پورسانت ویژه کالای پرفروش' && t.name !== 'پاداش نقدی فروش');
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
 
   // Commission Settlements State
-  const [settlements, setSettlements] = useState<CommissionSettlement[]>([]);
+  const [settlements, setSettlements] = useState<CommissionSettlement[]>(() => {
+    try {
+      const raw = localStorage.getItem('commission_settlements_list');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
 
   // Global Base Fixed Commission Per Invoice State
-  const [globalFixedInvoiceComm, setGlobalFixedInvoiceComm] = useState<string>('0');
+  const [globalFixedInvoiceComm, setGlobalFixedInvoiceComm] = useState<string>(() => {
+    return localStorage.getItem('global_fixed_invoice_comm') || '0';
+  });
 
   // Urgent Fixed Commission State
-  const [urgentFixedInvoiceComm, setUrgentFixedInvoiceComm] = useState<string>('0');
+  const [urgentFixedInvoiceComm, setUrgentFixedInvoiceComm] = useState<string>(() => {
+    return localStorage.getItem('urgent_fixed_invoice_comm') || '0';
+  });
 
   // Emergency Fixed Commission State
-  const [emergencyFixedInvoiceComm, setEmergencyFixedInvoiceComm] = useState<string>('0');
+  const [emergencyFixedInvoiceComm, setEmergencyFixedInvoiceComm] = useState<string>(() => {
+    return localStorage.getItem('emergency_fixed_invoice_comm') || '0';
+  });
 
   // Fixed Invoice Commission State (Overrides for specific invoices)
-  const [fixedInvoiceCommissions, setFixedInvoiceCommissions] = useState<{ [invoiceId: string]: number }>({});
+  const [fixedInvoiceCommissions, setFixedInvoiceCommissions] = useState<{ [invoiceId: string]: number }>(() => {
+    try {
+      const raw = localStorage.getItem('fixed_invoice_commissions');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === 'object' && parsed !== null) return parsed;
+      }
+    } catch (_) {}
+    return {};
+  });
+  const [hasLoadedCommissions, setHasLoadedCommissions] = useState<boolean>(false);
 
   // Shipping Methods fetched from System Settings
   const [shippingMethods, setShippingMethods] = useState<{ id: string; name: string; iconData: string; note?: string }[]>(() => getStoredShippingMethods());
 
   // Shipping Method Fixed Commission Amounts map (shippingMethodId or name -> fixed amount)
-  const [shippingMethodCommissions, setShippingMethodCommissions] = useState<Record<string, string>>({});
+  const [shippingMethodCommissions, setShippingMethodCommissions] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem('shipping_method_fixed_commissions');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === 'object' && parsed !== null) return parsed;
+      }
+    } catch (_) {}
+    return {};
+  });
 
   // Fetch initial commission configuration from central MySQL database on mount
   useEffect(() => {
-    // Purge legacy financial keys from localStorage
+    // Purge only actual legacy or temp diagnostic items if necessary, but DO NOT wipe active working keys from localStorage!
     if (typeof window !== 'undefined') {
       try {
-        localStorage.removeItem('category_quantity_commission_rules');
-        localStorage.removeItem('commission_tags_list');
-        localStorage.removeItem('commission_settlements_list');
-        localStorage.removeItem('global_fixed_invoice_comm');
-        localStorage.removeItem('urgent_fixed_invoice_comm');
-        localStorage.removeItem('emergency_fixed_invoice_comm');
-        localStorage.removeItem('fixed_invoice_commissions');
-        localStorage.removeItem('shipping_method_fixed_commissions');
         localStorage.removeItem('acc_app_invoices');
         localStorage.removeItem('acc_app_users');
         localStorage.removeItem('acc_app_items');
@@ -152,60 +195,108 @@ export default function CommissionReport({
         ];
         
         for (const k of keys) {
-          const res = await fetch(`/api/db/load-key?key=${encodeURIComponent(k)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.status === 'success' && data.data !== undefined && data.data !== null) {
-              const val = data.data;
+          try {
+            const res = await fetch(`/api/db/load-key?key=${encodeURIComponent(k)}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.status === 'success' && data.data !== undefined && data.data !== null) {
+                const val = data.data;
+                localStorage.setItem(k, typeof val === 'string' ? val : JSON.stringify(val));
+
+                if (k === 'category_quantity_commission_rules' && Array.isArray(val)) setCategoryQuantityRules(val);
+                else if (k === 'commission_tags_list' && Array.isArray(val)) setTags(val.filter((t: any) => t.id !== '1' && t.id !== '2' && t.name !== 'پورسانت ویژه کالای پرفروش' && t.name !== 'پاداش نقدی فروش'));
+                else if (k === 'commission_settlements_list' && Array.isArray(val)) setSettlements(val);
+                else if (k === 'global_fixed_invoice_comm') setGlobalFixedInvoiceComm(String(val));
+                else if (k === 'urgent_fixed_invoice_comm') setUrgentFixedInvoiceComm(String(val));
+                else if (k === 'emergency_fixed_invoice_comm') setEmergencyFixedInvoiceComm(String(val));
+                else if (k === 'fixed_invoice_commissions' && typeof val === 'object') setFixedInvoiceCommissions(val);
+                else if (k === 'shipping_method_fixed_commissions' && typeof val === 'object') setShippingMethodCommissions(val);
+                else if (k === 'warehouse_categories_list' && Array.isArray(val)) setCategoriesList(val);
+                continue;
+              }
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch key ${k}:`, e);
+          }
+
+          // Fallback to localStorage
+          const localVal = localStorage.getItem(k);
+          if (localVal !== null) {
+            try {
+              const val = JSON.parse(localVal);
               if (k === 'category_quantity_commission_rules' && Array.isArray(val)) setCategoryQuantityRules(val);
-              else if (k === 'commission_tags_list' && Array.isArray(val) && val.length > 0) setTags(val);
+              else if (k === 'commission_tags_list' && Array.isArray(val)) setTags(val.filter((t: any) => t.id !== '1' && t.id !== '2' && t.name !== 'پورسانت ویژه کالای پرفروش' && t.name !== 'پاداش نقدی فروش'));
               else if (k === 'commission_settlements_list' && Array.isArray(val)) setSettlements(val);
-              else if (k === 'global_fixed_invoice_comm') setGlobalFixedInvoiceComm(String(val));
-              else if (k === 'urgent_fixed_invoice_comm') setUrgentFixedInvoiceComm(String(val));
-              else if (k === 'emergency_fixed_invoice_comm') setEmergencyFixedInvoiceComm(String(val));
+              else if (k === 'global_fixed_invoice_comm') setGlobalFixedInvoiceComm(String(localVal));
+              else if (k === 'urgent_fixed_invoice_comm') setUrgentFixedInvoiceComm(String(localVal));
+              else if (k === 'emergency_fixed_invoice_comm') setEmergencyFixedInvoiceComm(String(localVal));
               else if (k === 'fixed_invoice_commissions' && typeof val === 'object') setFixedInvoiceCommissions(val);
               else if (k === 'shipping_method_fixed_commissions' && typeof val === 'object') setShippingMethodCommissions(val);
               else if (k === 'warehouse_categories_list' && Array.isArray(val)) setCategoriesList(val);
+            } catch (_) {
+              if (k === 'global_fixed_invoice_comm') setGlobalFixedInvoiceComm(localVal);
+              else if (k === 'urgent_fixed_invoice_comm') setUrgentFixedInvoiceComm(localVal);
+              else if (k === 'emergency_fixed_invoice_comm') setEmergencyFixedInvoiceComm(localVal);
             }
           }
         }
+        setHasLoadedCommissions(true);
       } catch (err) {
         console.warn('Failed to load commission settings from MySQL:', err);
+        setHasLoadedCommissions(true);
       }
     };
 
     loadCommissionKeys();
   }, []);
 
-  // Save tags to MySQL
+  // Save tags to MySQL and localStorage
   useEffect(() => {
-    saveGenericKeyToDb('commission_tags_list', tags);
-  }, [tags]);
+    if (hasLoadedCommissions) {
+      saveGenericKeyToDb('commission_tags_list', tags);
+      localStorage.setItem('commission_tags_list', JSON.stringify(tags));
+    }
+  }, [tags, hasLoadedCommissions]);
 
-  // Save settlements to MySQL
+  // Save settlements to MySQL and localStorage
   useEffect(() => {
-    saveGenericKeyToDb('commission_settlements_list', settlements);
-  }, [settlements]);
+    if (hasLoadedCommissions) {
+      saveGenericKeyToDb('commission_settlements_list', settlements);
+      localStorage.setItem('commission_settlements_list', JSON.stringify(settlements));
+    }
+  }, [settlements, hasLoadedCommissions]);
 
-  // Save global fixed invoice commission to MySQL
+  // Save global fixed invoice commission to MySQL and localStorage
   useEffect(() => {
-    saveGenericKeyToDb('global_fixed_invoice_comm', globalFixedInvoiceComm);
-  }, [globalFixedInvoiceComm]);
+    if (hasLoadedCommissions) {
+      saveGenericKeyToDb('global_fixed_invoice_comm', globalFixedInvoiceComm);
+      localStorage.setItem('global_fixed_invoice_comm', String(globalFixedInvoiceComm));
+    }
+  }, [globalFixedInvoiceComm, hasLoadedCommissions]);
 
-  // Save urgent fixed commission to MySQL
+  // Save urgent fixed commission to MySQL and localStorage
   useEffect(() => {
-    saveGenericKeyToDb('urgent_fixed_invoice_comm', urgentFixedInvoiceComm);
-  }, [urgentFixedInvoiceComm]);
+    if (hasLoadedCommissions) {
+      saveGenericKeyToDb('urgent_fixed_invoice_comm', urgentFixedInvoiceComm);
+      localStorage.setItem('urgent_fixed_invoice_comm', String(urgentFixedInvoiceComm));
+    }
+  }, [urgentFixedInvoiceComm, hasLoadedCommissions]);
 
-  // Save emergency fixed commission to MySQL
+  // Save emergency fixed commission to MySQL and localStorage
   useEffect(() => {
-    saveGenericKeyToDb('emergency_fixed_invoice_comm', emergencyFixedInvoiceComm);
-  }, [emergencyFixedInvoiceComm]);
+    if (hasLoadedCommissions) {
+      saveGenericKeyToDb('emergency_fixed_invoice_comm', emergencyFixedInvoiceComm);
+      localStorage.setItem('emergency_fixed_invoice_comm', String(emergencyFixedInvoiceComm));
+    }
+  }, [emergencyFixedInvoiceComm, hasLoadedCommissions]);
 
-  // Save fixed invoice commissions map to MySQL
+  // Save fixed invoice commissions map to MySQL and localStorage
   useEffect(() => {
-    saveGenericKeyToDb('fixed_invoice_commissions', fixedInvoiceCommissions);
-  }, [fixedInvoiceCommissions]);
+    if (hasLoadedCommissions) {
+      saveGenericKeyToDb('fixed_invoice_commissions', fixedInvoiceCommissions);
+      localStorage.setItem('fixed_invoice_commissions', JSON.stringify(fixedInvoiceCommissions));
+    }
+  }, [fixedInvoiceCommissions, hasLoadedCommissions]);
 
   // Keep shipping methods and warehouse categories list updated
   useEffect(() => {
@@ -233,25 +324,19 @@ export default function CommissionReport({
     };
   }, []);
 
-  // Save shipping method commissions to MySQL
+  // Save shipping method commissions to MySQL and localStorage
   useEffect(() => {
-    saveGenericKeyToDb('shipping_method_fixed_commissions', shippingMethodCommissions);
-  }, [shippingMethodCommissions]);
+    if (hasLoadedCommissions) {
+      saveGenericKeyToDb('shipping_method_fixed_commissions', shippingMethodCommissions);
+      localStorage.setItem('shipping_method_fixed_commissions', JSON.stringify(shippingMethodCommissions));
+    }
+  }, [shippingMethodCommissions, hasLoadedCommissions]);
 
   // Drawer state for Shipping Methods Commission (پنجره کشویی روش‌های ارسال)
   const [isShippingMethodsDrawerOpen, setIsShippingMethodsDrawerOpen] = useState<boolean>(false);
 
   // Drawer state for Fixed Invoice Commission (منوی کشویی پورسانت ثابت هر فاکتور)
   const [isFixedCommDrawerOpen, setIsFixedCommDrawerOpen] = useState<boolean>(false);
-
-  // Drawer state for New Tag Definition (defaults to closed / کشویی متصل به پایین)
-  const [isTagDrawerOpen, setIsTagDrawerOpen] = useState<boolean>(false);
-
-  // New Tag Form state
-  const [newTagName, setNewTagName] = useState<string>('');
-  const [newTagType, setNewTagType] = useState<'percent' | 'fixed'>('percent');
-  const [newTagValue, setNewTagValue] = useState<string>('0');
-  const [newTagDesc, setNewTagDesc] = useState<string>('');
 
   // Tag Delete Confirmation Modal state
   const [tagToDelete, setTagToDelete] = useState<CommissionTag | null>(null);
@@ -527,47 +612,6 @@ export default function CommissionReport({
       totalCommission
     };
   }, [selectedDetailInvoice, warehouseItems, categoriesList, categoryQuantityRules, tags, globalFixedInvoiceComm, fixedInvoiceCommissions, urgentFixedInvoiceComm, emergencyFixedInvoiceComm, shippingMethods, shippingMethodCommissions]);
-
-  // Helper to handle creation of a new tag
-  const handleAddTag = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTagName.trim()) return;
-    const val = parseFloat(newTagValue) || 0;
-    const cleanName = newTagName.trim();
-
-    setTags(prev => {
-      const existingIdx = prev.findIndex(t => t.name.trim().toLowerCase() === cleanName.toLowerCase());
-      if (existingIdx !== -1) {
-        // Update existing tag instead of creating a duplicate tag entry
-        return prev.map((t, idx) => {
-          if (idx === existingIdx) {
-            return {
-              ...t,
-              name: cleanName,
-              type: newTagType,
-              value: val,
-              description: newTagDesc.trim() || t.description
-            };
-          }
-          return t;
-        });
-      }
-      const tag: CommissionTag = {
-        id: Date.now().toString(),
-        name: cleanName,
-        type: newTagType,
-        value: val,
-        description: newTagDesc.trim(),
-        createdAt: getTodayJalali(),
-        createdBy: currentUser?.name || 'مدیر سیستم'
-      };
-      return [...prev, tag];
-    });
-
-    setNewTagName('');
-    setNewTagValue('0');
-    setNewTagDesc('');
-  };
 
   // Helper to open edit tag modal
   const handleOpenEditTag = (t: CommissionTag) => {
@@ -1004,16 +1048,6 @@ export default function CommissionReport({
             </p>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setIsTagDrawerOpen(!isTagDrawerOpen)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white/15 hover:bg-white/25 rounded-xl text-xs font-black transition-all border border-white/20 shadow-sm cursor-pointer shrink-0"
-        >
-          <Tag className="w-4 h-4 text-amber-200" />
-          <span>{isTagDrawerOpen ? 'بستن کشوی تعریف تگ پورسانت' : 'تعریف و مدیریت تگ پورسانت جدید'}</span>
-          {isTagDrawerOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
       </div>
 
       {/* Overview Statistics Cards */}
@@ -1275,207 +1309,6 @@ export default function CommissionReport({
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Independent Sliding Drawer for Tag Definitions (پنجره کشویی تعریف تگ پورسانت جدید) */}
-      <div className="bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-900/60 rounded-2xl shadow-md overflow-hidden transition-all duration-300">
-        <div
-          onClick={() => setIsTagDrawerOpen(!isTagDrawerOpen)}
-          className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent flex items-center justify-between cursor-pointer select-none border-b border-amber-100 dark:border-amber-900/40"
-        >
-          <div className="flex items-center gap-2">
-            <Tag className="w-5 h-5 text-amber-600" />
-            <span className="font-black text-sm text-slate-800 dark:text-slate-100">
-              پنجره تعریف و مدیریت تگ‌های پورسانت (کشویی مجزا)
-            </span>
-            <span className="text-xs text-amber-700 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-              {toPersianDigits(tags.length)} تگ فعال
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-400">
-            <span>{isTagDrawerOpen ? 'بستن کشو' : 'باز کردن کشو'}</span>
-            {isTagDrawerOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </div>
-        </div>
-
-        {isTagDrawerOpen && (
-          <div className="p-6 space-y-6">
-            {/* Form for new Tag */}
-            <form onSubmit={handleAddTag} className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center gap-2 text-xs font-extrabold text-amber-700 dark:text-amber-400 border-b border-slate-200 dark:border-slate-800 pb-2">
-                <Plus className="w-4 h-4" />
-                <span>تعریف تگ پورسانت جدید (ثابت یا درصدی)</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-semibold">
-                {/* Tag Name */}
-                <div className="space-y-1">
-                  <label className="text-slate-600 dark:text-slate-400 block">عنوان تگ پورسانت</label>
-                  <input
-                    type="text"
-                    required
-                    value={newTagName}
-                    onChange={(e) => setNewTagName(e.target.value)}
-                    placeholder="مثال: پورسانت ویژه فروش"
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-
-                {/* Tag Type */}
-                <div className="space-y-1">
-                  <label className="text-slate-600 dark:text-slate-400 block">نوع محاسبه</label>
-                  <select
-                    value={newTagType}
-                    onChange={(e) => setNewTagType(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="percent">درصدی (%)</option>
-                    <option value="fixed">مبلغ ثابت ({currencyLabel})</option>
-                  </select>
-                </div>
-
-                {/* Value */}
-                <div className="space-y-1">
-                  <label className="text-slate-600 dark:text-slate-400 block">
-                    {newTagType === 'percent' ? 'درصد پورسانت (%)' : `مبلغ پورسانت (${currencyLabel})`}
-                  </label>
-                  <input
-                    type="number"
-                    step={newTagType === 'percent' ? '0.5' : '1000'}
-                    min="0"
-                    required
-                    value={newTagValue}
-                    onChange={(e) => setNewTagValue(e.target.value)}
-                    placeholder={newTagType === 'percent' ? 'مثال: 5' : 'مثال: 50000'}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="space-y-1">
-                  <label className="text-slate-600 dark:text-slate-400 block">توضیحات و ملاحظات</label>
-                  <input
-                    type="text"
-                    value={newTagDesc}
-                    onChange={(e) => setNewTagDesc(e.target.value)}
-                    placeholder="توضیح اختیاری..."
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow-sm cursor-pointer transition-all inline-flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>ثبت تگ پورسانت جدید</span>
-                </button>
-              </div>
-            </form>
-
-            {/* List of Defined Tags */}
-            <div className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <span className="font-extrabold text-xs text-slate-700 dark:text-slate-200 block">
-                  لیست تگ‌های پورسانت فعال سیستم:
-                </span>
-                <span className="text-[11px] text-amber-700 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-900/40 inline-flex items-center gap-1 w-fit">
-                  <GripVertical className="w-3 h-3 text-amber-500" />
-                  <span>قابلیت جابه‌جایی و تعیین اولویت با کشیدن و رها کردن (Drag & Drop)</span>
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {tags.map((t, idx) => (
-                  <div
-                    key={t.id}
-                    draggable
-                    onDragStart={() => setDraggedTagIndex(idx)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => {
-                      moveTag(draggedTagIndex, idx);
-                      setDraggedTagIndex(null);
-                    }}
-                    className={`bg-slate-50 dark:bg-slate-950 border ${
-                      draggedTagIndex === idx ? 'border-amber-500 ring-2 ring-amber-500/40' : 'border-slate-200 dark:border-slate-800'
-                    } rounded-xl p-3 flex items-start justify-between gap-2 shadow-xs hover:border-amber-300 dark:hover:border-amber-800 transition-all select-none`}
-                  >
-                    {/* Left/Start side: Drag grip + Details */}
-                    <div className="flex items-start gap-2 flex-1 min-w-0">
-                      <div
-                        className="pt-0.5 text-slate-400 cursor-grab active:cursor-grabbing hover:text-amber-600 dark:hover:text-amber-400 transition-colors shrink-0"
-                        title="جهت جابه‌جایی و تغییر اولویت تگ، این آیکون را بکشید"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <Tag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          <span className="font-black text-xs text-slate-800 dark:text-slate-100 truncate">{t.name}</span>
-                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ${
-                            t.type === 'percent'
-                              ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
-                              : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
-                          }`}>
-                            {t.type === 'percent' ? `%${toPersianDigits(t.value)}` : formatCurrency(t.value)}
-                          </span>
-                        </div>
-                        {t.description && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">{t.description}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Action Controls: Up/Down, Edit, Delete */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <div className="flex flex-col gap-0.5">
-                        <button
-                          type="button"
-                          disabled={idx === 0}
-                          onClick={() => moveTag(idx, idx - 1)}
-                          className="p-0.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer transition-colors"
-                          title="انتقال به بالا"
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={idx === tags.length - 1}
-                          onClick={() => moveTag(idx, idx + 1)}
-                          className="p-0.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer transition-colors"
-                          title="انتقال به پایین"
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditTag(t)}
-                        className="p-1.5 text-slate-600 hover:text-amber-600 hover:bg-amber-100/60 dark:text-slate-300 dark:hover:text-amber-400 dark:hover:bg-amber-950/60 rounded-lg cursor-pointer transition-colors"
-                        title="ویرایش تگ"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setTagToDelete(t)}
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg cursor-pointer transition-colors"
-                        title="حذف تگ"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Streamlined Menu: Fixed Base & Urgent/Emergency Commission Per Invoice */}

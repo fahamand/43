@@ -597,6 +597,51 @@ function runDatabaseMigrationsPhp($pdo) {
 }
 
 /**
+ * دریافت لیست بروز و زنده کالاها مستقیم از جدول رابطه‌ای items در MySQL
+ */
+function getFreshItemsFromDb($pdo) {
+    if (!$pdo) return [];
+    try {
+        $stmtFresh = $pdo->query("SELECT * FROM items ORDER BY id DESC");
+        $itemRows = $stmtFresh->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $itemList = [];
+        foreach ($itemRows as $r) {
+            $itemList[] = [
+                'id' => $r['id'],
+                'warehouseId' => $r['warehouse_id'],
+                'name' => $r['name'],
+                'code' => $r['code'],
+                'type' => isset($r['type']) ? $r['type'] : 'kala',
+                'color' => isset($r['color']) ? $r['color'] : null,
+                'unit' => isset($r['unit']) ? $r['unit'] : null,
+                'qty' => isset($r['qty']) ? floatval($r['qty']) : 0,
+                'stock' => isset($r['qty']) ? floatval($r['qty']) : 0,
+                'initialQty' => isset($r['initial_qty']) ? floatval($r['initial_qty']) : 0,
+                'purchasePrice' => isset($r['last_purchase_price']) ? floatval($r['last_purchase_price']) : 0,
+                'lastPurchasePrice' => isset($r['last_purchase_price']) ? floatval($r['last_purchase_price']) : 0,
+                'salePrice' => isset($r['last_sale_price']) ? floatval($r['last_sale_price']) : 0,
+                'lastSalePrice' => isset($r['last_sale_price']) ? floatval($r['last_sale_price']) : 0,
+                'minStock' => isset($r['min_qty_alarm']) ? floatval($r['min_qty_alarm']) : 0,
+                'minQtyAlarm' => isset($r['min_qty_alarm']) ? floatval($r['min_qty_alarm']) : 0,
+                'category' => $r['category_name'],
+                'categoryName' => $r['category_name'],
+                'parentCategory' => $r['parent_category'],
+                'subCategory' => $r['sub_category'],
+                'commissionPercent' => isset($r['commission_percent']) ? floatval($r['commission_percent']) : 0,
+                'setupDate' => $r['setup_date'],
+                'fiscalYearId' => $r['fiscal_year_id'],
+                'createdBy' => $r['created_by'],
+                'createdAt' => $r['created_at'],
+                'updatedAt' => $r['updated_at']
+            ];
+        }
+        return $itemList;
+    } catch (Exception $err) {
+        return [];
+    }
+}
+
+/**
  * به‌روزرسانی تراکنشی و اتمیک موجودی انبار اقلام متناظر در جدول items با هر تغییر در فاکتور در PHP
  */
 function adjustInventoryForInvoicePhp($pdo, $invoiceId, $isDeleted = false, $incomingInvoiceObj = null) {
@@ -699,6 +744,19 @@ function adjustInventoryForInvoicePhp($pdo, $invoiceId, $isDeleted = false, $inc
                 }
             }
         }
+    }
+
+    // 7. Synchronize the app_state table with the fresh state of the database in PHP
+    try {
+        $itemList = getFreshItemsFromDb($pdo);
+        if (!empty($itemList)) {
+            $jsonStr = json_encode($itemList, JSON_UNESCAPED_UNICODE);
+            $syncStmt = $pdo->prepare("INSERT INTO app_state (state_key, state_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE state_value = VALUES(state_value), updated_at = CURRENT_TIMESTAMP");
+            $syncStmt->execute(['items', $jsonStr]);
+            $syncStmt->execute(['acc_app_items', $jsonStr]);
+        }
+    } catch (Exception $err) {
+        // Log or handle error silently
     }
 }
 
@@ -1077,7 +1135,7 @@ function migrateAppStateDataToRelationalTablesPhp($pdo) {
                 type = VALUES(type),
                 color = VALUES(color),
                 unit = VALUES(unit),
-                qty = VALUES(qty),
+                qty = qty + (VALUES(initial_qty) - initial_qty),
                 initial_qty = VALUES(initial_qty),
                 last_purchase_price = VALUES(last_purchase_price),
                 last_sale_price = VALUES(last_sale_price),
@@ -2202,6 +2260,13 @@ function loadAllData($pdo) {
         $result['acc_app_' . $cleanKey] = $val;
     }
 
+    // جایگزینی کالاها با مقدار واقعی و زنده از جدول رابطه‌ای جهت همگام‌سازی بی‌نقص
+    $freshItems = getFreshItemsFromDb($pdo);
+    if (!empty($freshItems)) {
+        $result['items'] = $freshItems;
+        $result['acc_app_items'] = $freshItems;
+    }
+
     return $result;
 }
 
@@ -2232,6 +2297,13 @@ function getKeyDataPhp($pdo, $key) {
     }
     $cleanKey = (strpos($key, 'acc_app_') === 0) ? substr($key, 8) : $key;
     $fullKey = 'acc_app_' . $cleanKey;
+
+    if ($cleanKey === 'items') {
+        $freshItems = getFreshItemsFromDb($pdo);
+        if (!empty($freshItems)) {
+            return $freshItems;
+        }
+    }
 
     try {
         $stmt = $pdo->prepare("SELECT state_value FROM app_state WHERE state_key = :k1 OR state_key = :k2 LIMIT 1");
@@ -2580,6 +2652,451 @@ function extractAndSaveBase64ImagesPhp(&$data, $category = 'general') {
     }
 }
 
+// تابع کمکی برای ثبت فاکتور به صورت رابطه‌ای در جداول MySQL
+function saveSingleInvoiceRelationalPhp($pdo, $inv) {
+    if (!$inv || !is_array($inv)) return;
+    $id = isset($inv['id']) ? strval($inv['id']) : 'inv_' . (isset($inv['invoiceNumber']) ? $inv['invoiceNumber'] : bin2hex(random_bytes(4)));
+
+    // به روز رسانی تراکنشی موجودی کالاها در جدول رابطه‌ای items قبل از به روز رسانی ردیف‌های فاکتور
+    adjustInventoryForInvoicePhp($pdo, $id, !empty($inv['isDeleted']), $inv);
+
+    $invoiceNumber = isset($inv['invoiceNumber']) ? strval($inv['invoiceNumber']) : $id;
+    $type = isset($inv['type']) ? $inv['type'] : 'sale';
+    $date = isset($inv['date']) ? strval($inv['date']) : '';
+    $counterpartId = isset($inv['counterpartId']) ? $inv['counterpartId'] : null;
+    $counterpartName = isset($inv['counterpartName']) ? $inv['counterpartName'] : null;
+    $counterpartPhone = isset($inv['counterpartPhone']) ? $inv['counterpartPhone'] : null;
+    $counterpartAddress = isset($inv['counterpartAddress']) ? $inv['counterpartAddress'] : null;
+    $totalAmount = isset($inv['totalAmount']) ? floatval($inv['totalAmount']) : 0;
+    $tax = isset($inv['tax']) ? floatval($inv['tax']) : 0;
+    $deposit = isset($inv['deposit']) ? floatval($inv['deposit']) : 0;
+    $discount = isset($inv['discount']) ? floatval($inv['discount']) : 0;
+    $paymentAmount = isset($inv['paymentAmount']) ? floatval($inv['paymentAmount']) : 0;
+    $paymentDate = isset($inv['paymentDate']) ? $inv['paymentDate'] : null;
+    $description = isset($inv['description']) ? $inv['description'] : null;
+    $isProforma = !empty($inv['isProforma']) ? 1 : 0;
+    $isUrgent = !empty($inv['isUrgent']) ? 1 : 0;
+    $urgentType = isset($inv['urgentType']) ? $inv['urgentType'] : null;
+    $shippingMethod = isset($inv['shippingMethod']) ? $inv['shippingMethod'] : null;
+    $acquaintanceMethod = isset($inv['acquaintanceMethod']) ? $inv['acquaintanceMethod'] : null;
+    $docId = isset($inv['docId']) ? $inv['docId'] : null;
+    $cogsDocId = isset($inv['cogsDocId']) ? $inv['cogsDocId'] : null;
+    $cogsTotal = isset($inv['cogsTotal']) ? floatval($inv['cogsTotal']) : 0;
+    $isReturn = !empty($inv['isReturn']) ? 1 : 0;
+    $returnRefInvoiceId = isset($inv['returnRefInvoiceId']) ? $inv['returnRefInvoiceId'] : null;
+    $isDeleted = !empty($inv['isDeleted']) ? 1 : 0;
+    $deletedBy = isset($inv['deletedBy']) ? $inv['deletedBy'] : null;
+    $deletedById = isset($inv['deletedById']) ? $inv['deletedById'] : null;
+    $deletedAt = isset($inv['deletedAt']) ? $inv['deletedAt'] : null;
+    $customIcons = isset($inv['customIcons']) ? (is_string($inv['customIcons']) ? $inv['customIcons'] : json_encode($inv['customIcons'], JSON_UNESCAPED_UNICODE)) : null;
+    $attachments = isset($inv['attachments']) ? (is_string($inv['attachments']) ? $inv['attachments'] : json_encode($inv['attachments'], JSON_UNESCAPED_UNICODE)) : null;
+    $paymentSlips = isset($inv['paymentSlips']) ? (is_string($inv['paymentSlips']) ? $inv['paymentSlips'] : json_encode($inv['paymentSlips'], JSON_UNESCAPED_UNICODE)) : null;
+    $history = isset($inv['history']) ? (is_string($inv['history']) ? $inv['history'] : json_encode($inv['history'], JSON_UNESCAPED_UNICODE)) : null;
+    $allocations = isset($inv['allocations']) ? (is_string($inv['allocations']) ? $inv['allocations'] : json_encode($inv['allocations'], JSON_UNESCAPED_UNICODE)) : null;
+    $fiscalYearId = isset($inv['fiscalYearId']) ? $inv['fiscalYearId'] : null;
+    $createdBy = isset($inv['createdBy']) ? $inv['createdBy'] : null;
+    $createdById = isset($inv['createdById']) ? $inv['createdById'] : null;
+    $createdByPhone = isset($inv['createdByPhone']) ? $inv['createdByPhone'] : null;
+
+    $stmtInv = $pdo->prepare("INSERT INTO invoices (
+            id, invoice_number, type, date, counterpart_id, counterpart_name, counterpart_phone,
+            counterpart_address, total_amount, tax, deposit, discount, payment_amount, payment_date,
+            description, is_proforma, is_urgent, urgent_type, shipping_method, acquaintance_method,
+            doc_id, cogs_doc_id, cogs_total, is_return, return_ref_invoice_id, is_deleted,
+            deleted_by, deleted_by_id, deleted_at, custom_icons, attachments, payment_slips,
+            history, allocations, fiscal_year_id, created_by, created_by_id, created_by_phone
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            invoice_number = VALUES(invoice_number),
+            type = VALUES(type),
+            date = VALUES(date),
+            counterpart_id = VALUES(counterpart_id),
+            counterpart_name = VALUES(counterpart_name),
+            counterpart_phone = VALUES(counterpart_phone),
+            counterpart_address = VALUES(counterpart_address),
+            total_amount = VALUES(total_amount),
+            tax = VALUES(tax),
+            deposit = VALUES(deposit),
+            discount = VALUES(discount),
+            payment_amount = VALUES(payment_amount),
+            payment_date = VALUES(payment_date),
+            description = VALUES(description),
+            is_proforma = VALUES(is_proforma),
+            is_urgent = VALUES(is_urgent),
+            urgent_type = VALUES(urgent_type),
+            shipping_method = VALUES(shipping_method),
+            acquaintance_method = VALUES(acquaintance_method),
+            doc_id = VALUES(doc_id),
+            cogs_doc_id = VALUES(cogs_doc_id),
+            cogs_total = VALUES(cogs_total),
+            is_return = VALUES(is_return),
+            return_ref_invoice_id = VALUES(return_ref_invoice_id),
+            is_deleted = VALUES(is_deleted),
+            deleted_by = VALUES(deleted_by),
+            deleted_by_id = VALUES(deleted_by_id),
+            deleted_at = VALUES(deleted_at),
+            custom_icons = VALUES(custom_icons),
+            attachments = VALUES(attachments),
+            payment_slips = VALUES(payment_slips),
+            history = VALUES(history),
+            allocations = VALUES(allocations),
+            fiscal_year_id = VALUES(fiscal_year_id),
+            updated_at = CURRENT_TIMESTAMP");
+
+    $stmtInv->execute([
+        $id, $invoiceNumber, $type, $date, $counterpartId, $counterpartName, $counterpartPhone,
+        $counterpartAddress, $totalAmount, $tax, $deposit, $discount, $paymentAmount, $paymentDate,
+        $description, $isProforma, $isUrgent, $urgentType, $shippingMethod, $acquaintanceMethod,
+        $docId, $cogsDocId, $cogsTotal, $isReturn, $returnRefInvoiceId, $isDeleted,
+        $deletedBy, $deletedById, $deletedAt, $customIcons, $attachments, $paymentSlips,
+        $history, $allocations, $fiscalYearId, $createdBy, $createdById, $createdByPhone
+    ]);
+
+    // بازیابی تمام ردیف‌های قبلی برای حذف موارد قدیمی غیرموجود
+    $stmtExist = $pdo->prepare("SELECT id FROM invoice_items WHERE invoice_id = ?");
+    $stmtExist->execute([$id]);
+    $existingIds = $stmtExist->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+    $itemsArr = isset($inv['items']) && is_array($inv['items']) ? $inv['items'] : [];
+    $incomingIds = [];
+
+    $stmtItm = $pdo->prepare("INSERT INTO invoice_items (
+            id, invoice_id, item_id, name, type, color, unit, qty, unit_price,
+            total_price, cogs_unit_cost, cogs_total, remarks, sort_order, fiscal_year_id, created_by
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            type = VALUES(type),
+            color = VALUES(color),
+            unit = VALUES(unit),
+            qty = VALUES(qty),
+            unit_price = VALUES(unit_price),
+            total_price = VALUES(total_price),
+            cogs_unit_cost = VALUES(cogs_unit_cost),
+            cogs_total = VALUES(cogs_total),
+            remarks = VALUES(remarks),
+            sort_order = VALUES(sort_order),
+            fiscal_year_id = VALUES(fiscal_year_id),
+            updated_at = CURRENT_TIMESTAMP");
+
+    foreach ($itemsArr as $idx => $item) {
+        $itemIdPk = !empty($item['id']) ? strval($item['id']) : "{$id}_item_" . ($idx + 1);
+        $incomingIds[] = $itemIdPk;
+        $refItemId = isset($item['itemId']) ? $item['itemId'] : null;
+        $itemName = !empty($item['name']) ? strval($item['name']) : 'ردیف فاکتور';
+        $itemType = isset($item['type']) ? $item['type'] : 'kala';
+        $itemColor = isset($item['color']) ? $item['color'] : null;
+        $itemUnit = isset($item['unit']) ? $item['unit'] : null;
+        $itemQty = isset($item['qty']) ? floatval($item['qty']) : 1;
+        $itemUnitPrice = isset($item['unitPrice']) ? floatval($item['unitPrice']) : 0;
+        $itemTotalPrice = isset($item['totalPrice']) ? floatval($item['totalPrice']) : ($itemQty * $itemUnitPrice);
+        $itemCogsUnit = isset($item['cogsUnitCost']) ? floatval($item['cogsUnitCost']) : 0;
+        $itemCogsTotal = isset($item['cogsTotal']) ? floatval($item['cogsTotal']) : ($itemQty * $itemCogsUnit);
+        $itemRemarks = isset($item['remarks']) ? $item['remarks'] : null;
+
+        $stmtItm->execute([
+            $itemIdPk, $id, $refItemId, $itemName, $itemType, $itemColor, $itemUnit, $itemQty, $itemUnitPrice,
+            $itemTotalPrice, $itemCogsUnit, $itemCogsTotal, $itemRemarks, $idx, $fiscalYearId, $createdBy
+        ]);
+    }
+
+    foreach ($existingIds as $oldId) {
+        if (!in_array($oldId, $incomingIds)) {
+            $stmtDel = $pdo->prepare("DELETE FROM invoice_items WHERE id = ? AND invoice_id = ?");
+            $stmtDel->execute([$oldId, $id]);
+        }
+    }
+}
+
+// تابع کمکی برای ثبت کالا به صورت رابطه‌ای در جداول MySQL
+function saveSingleItemRelationalPhp($pdo, $input) {
+    if (!$input || !is_array($input)) return;
+    $id = isset($input['id']) ? trim(strval($input['id'])) : '';
+    $name = isset($input['name']) ? trim(strval($input['name'])) : '';
+    if ($id === '' || $name === '') return;
+
+    $warehouseId = isset($input['warehouseId']) ? $input['warehouseId'] : (isset($input['warehouse_id']) ? $input['warehouse_id'] : null);
+    $code = isset($input['code']) ? $input['code'] : null;
+    $type = isset($input['type']) ? $input['type'] : 'kala';
+    $color = isset($input['color']) ? $input['color'] : null;
+    $unit = isset($input['unit']) ? $input['unit'] : null;
+    $qty = isset($input['qty']) && $input['qty'] !== '' ? floatval($input['qty']) : 0;
+    $initialQty = isset($input['initialQty']) && $input['initialQty'] !== '' ? floatval($input['initialQty']) : (isset($input['initial_qty']) && $input['initial_qty'] !== '' ? floatval($input['initial_qty']) : 0);
+    $lastPurchasePrice = isset($input['lastPurchasePrice']) && $input['lastPurchasePrice'] !== '' ? floatval($input['lastPurchasePrice']) : (isset($input['last_purchase_price']) && $input['last_purchase_price'] !== '' ? floatval($input['last_purchase_price']) : 0);
+    $lastSalePrice = isset($input['lastSalePrice']) && $input['lastSalePrice'] !== '' ? floatval($input['lastSalePrice']) : (isset($input['last_sale_price']) && $input['last_sale_price'] !== '' ? floatval($input['last_sale_price']) : 0);
+    $minQtyAlarm = isset($input['minQtyAlarm']) && $input['minQtyAlarm'] !== '' ? floatval($input['minQtyAlarm']) : (isset($input['min_qty_alarm']) && $input['min_qty_alarm'] !== '' ? floatval($input['min_qty_alarm']) : 0);
+    $categoryName = isset($input['categoryName']) ? $input['categoryName'] : (isset($input['category_name']) ? $input['category_name'] : (isset($input['category']) ? $input['category'] : null));
+    $parentCategory = isset($input['parentCategory']) ? $input['parentCategory'] : (isset($input['parent_category']) ? $input['parent_category'] : null);
+    $subCategory = isset($input['subCategory']) ? $input['subCategory'] : (isset($input['sub_category']) ? $input['sub_category'] : null);
+    $commissionPercent = isset($input['commissionPercent']) && $input['commissionPercent'] !== '' ? floatval($input['commissionPercent']) : (isset($input['commission_percent']) && $input['commission_percent'] !== '' ? floatval($input['commission_percent']) : 0);
+    $setupDate = isset($input['setupDate']) ? $input['setupDate'] : (isset($input['setup_date']) ? $input['setup_date'] : null);
+    $fiscalYearId = isset($input['fiscalYearId']) ? $input['fiscalYearId'] : (isset($input['fiscal_year_id']) ? $input['fiscal_year_id'] : null);
+    $createdBy = isset($input['createdBy']) ? $input['createdBy'] : (isset($input['created_by']) ? $input['created_by'] : null);
+
+    $stmt = $pdo->prepare("INSERT INTO items (
+            id, warehouse_id, name, code, type, color, unit, qty, initial_qty,
+            last_purchase_price, last_sale_price, min_qty_alarm, category_name,
+            parent_category, sub_category, commission_percent, setup_date, fiscal_year_id, created_by
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            warehouse_id = VALUES(warehouse_id),
+            name = VALUES(name),
+            code = VALUES(code),
+            type = VALUES(type),
+            color = VALUES(color),
+            unit = VALUES(unit),
+            qty = qty + (VALUES(initial_qty) - initial_qty),
+            initial_qty = VALUES(initial_qty),
+            last_purchase_price = VALUES(last_purchase_price),
+            last_sale_price = VALUES(last_sale_price),
+            min_qty_alarm = VALUES(min_qty_alarm),
+            category_name = VALUES(category_name),
+            parent_category = VALUES(parent_category),
+            sub_category = VALUES(sub_category),
+            commission_percent = VALUES(commission_percent),
+            setup_date = VALUES(setup_date),
+            fiscal_year_id = VALUES(fiscal_year_id),
+            created_by = VALUES(created_by),
+            updated_at = CURRENT_TIMESTAMP");
+
+    $stmt->execute([
+        $id, $warehouseId, $name, $code, $type, $color, $unit, $qty, $initialQty,
+        $lastPurchasePrice, $lastSalePrice, $minQtyAlarm, $categoryName,
+        $parentCategory, $subCategory, $commissionPercent, $setupDate, $fiscalYearId, $createdBy
+    ]);
+}
+
+// تابع کمکی برای ثبت تراکنش به صورت رابطه‌ای در جداول MySQL
+function saveSingleTransactionRelationalPhp($pdo, $tx) {
+    if (!$tx || !is_array($tx)) return;
+    $id = !empty($tx['id']) ? strval($tx['id']) : 'tx_' . bin2hex(random_bytes(4));
+    $date = !empty($tx['date']) ? strval($tx['date']) : '';
+    $time = isset($tx['time']) ? $tx['time'] : null;
+    $amount = isset($tx['amount']) ? floatval($tx['amount']) : 0;
+    $type = isset($tx['type']) ? $tx['type'] : 'deposit';
+    $description = isset($tx['description']) ? $tx['description'] : null;
+    $isRegistered = !empty($tx['isRegistered']) ? 1 : 0;
+    $categoryParent = isset($tx['categoryParent']) ? $tx['categoryParent'] : null;
+    $categoryChild = isset($tx['categoryChild']) ? $tx['categoryChild'] : null;
+    $userDescription = isset($tx['userDescription']) ? $tx['userDescription'] : null;
+    $isDuplicate = !empty($tx['isDuplicate']) ? 1 : 0;
+    $duplicateReason = isset($tx['duplicateReason']) ? $tx['duplicateReason'] : null;
+    $trackingNumber = isset($tx['trackingNumber']) ? $tx['trackingNumber'] : null;
+    $referenceCode = isset($tx['referenceCode']) ? $tx['referenceCode'] : null;
+    $registeredDate = isset($tx['registeredDate']) ? $tx['registeredDate'] : null;
+    $accountId = isset($tx['accountId']) ? $tx['accountId'] : null;
+    $partnerId = isset($tx['partnerId']) ? $tx['partnerId'] : null;
+    $pendingDepositId = isset($tx['pendingDepositId']) ? $tx['pendingDepositId'] : null;
+    $borrowerId = isset($tx['borrowerId']) ? $tx['borrowerId'] : null;
+    $borrowerName = isset($tx['borrowerName']) ? $tx['borrowerName'] : null;
+    $loanType = isset($tx['loanType']) ? $tx['loanType'] : null;
+    $counterpartId = isset($tx['counterpartId']) ? $tx['counterpartId'] : null;
+    $counterpartName = isset($tx['counterpartName']) ? $tx['counterpartName'] : null;
+    $invoiceId = isset($tx['invoiceId']) ? $tx['invoiceId'] : null;
+    $docId = isset($tx['docId']) ? $tx['docId'] : null;
+    $attachments = isset($tx['attachments']) ? (is_string($tx['attachments']) ? $tx['attachments'] : json_encode($tx['attachments'], JSON_UNESCAPED_UNICODE)) : null;
+    $isEdited = !empty($tx['isEdited']) ? 1 : 0;
+    $editedBy = isset($tx['editedBy']) ? $tx['editedBy'] : null;
+    $editedById = isset($tx['editedById']) ? $tx['editedById'] : null;
+    $editedAt = isset($tx['editedAt']) ? $tx['editedAt'] : null;
+    $editHistory = isset($tx['editHistory']) ? (is_string($tx['editHistory']) ? $tx['editHistory'] : json_encode($tx['editHistory'], JSON_UNESCAPED_UNICODE)) : null;
+    $isDeleted = !empty($tx['isDeleted']) ? 1 : 0;
+    $deletedBy = isset($tx['deletedBy']) ? $tx['deletedBy'] : null;
+    $deletedById = isset($tx['deletedById']) ? $tx['deletedById'] : null;
+    $deletedAt = isset($tx['deletedAt']) ? $tx['deletedAt'] : null;
+    $fiscalYearId = isset($tx['fiscalYearId']) ? $tx['fiscalYearId'] : null;
+    $createdBy = isset($tx['createdBy']) ? $tx['createdBy'] : null;
+    $createdById = isset($tx['createdById']) ? $tx['createdById'] : null;
+
+    $stmt = $pdo->prepare("INSERT INTO transactions (
+            id, date, time, amount, type, description, is_registered, category_parent,
+            category_child, user_description, is_duplicate, duplicate_reason, tracking_number,
+            reference_code, registered_date, account_id, partner_id, pending_deposit_id,
+            borrower_id, borrower_name, loan_type, counterpart_id, counterpart_name,
+            invoice_id, doc_id, attachments, is_edited, edited_by, edited_by_id, edited_at,
+            edit_history, is_deleted, deleted_by, deleted_by_id, deleted_at, fiscal_year_id,
+            created_by, created_by_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            date = VALUES(date),
+            time = VALUES(time),
+            amount = VALUES(amount),
+            type = VALUES(type),
+            description = VALUES(description),
+            is_registered = VALUES(is_registered),
+            category_parent = VALUES(category_parent),
+            category_child = VALUES(category_child),
+            user_description = VALUES(user_description),
+            is_duplicate = VALUES(is_duplicate),
+            duplicate_reason = VALUES(duplicate_reason),
+            tracking_number = VALUES(tracking_number),
+            reference_code = VALUES(reference_code),
+            registered_date = VALUES(registered_date),
+            account_id = VALUES(account_id),
+            partner_id = VALUES(partner_id),
+            pending_deposit_id = VALUES(pending_deposit_id),
+            borrower_id = VALUES(borrower_id),
+            borrower_name = VALUES(borrower_name),
+            loan_type = VALUES(loan_type),
+            counterpart_id = VALUES(counterpart_id),
+            counterpart_name = VALUES(counterpart_name),
+            invoice_id = VALUES(invoice_id),
+            doc_id = VALUES(doc_id),
+            attachments = VALUES(attachments),
+            is_edited = VALUES(is_edited),
+            edited_by = VALUES(edited_by),
+            edited_by_id = VALUES(edited_by_id),
+            edited_at = VALUES(edited_at),
+            edit_history = VALUES(edit_history),
+            is_deleted = VALUES(is_deleted),
+            deleted_by = VALUES(deleted_by),
+            deleted_by_id = VALUES(deleted_by_id),
+            deleted_at = VALUES(deleted_at),
+            fiscal_year_id = VALUES(fiscal_year_id),
+            updated_at = CURRENT_TIMESTAMP");
+
+    $stmt->execute([
+        $id, $date, $time, $amount, $type, $description, $isRegistered, $categoryParent,
+        $categoryChild, $userDescription, $isDuplicate, $duplicateReason, $trackingNumber,
+        $referenceCode, $registeredDate, $accountId, $partnerId, $pendingDepositId,
+        $borrowerId, $borrowerName, $loanType, $counterpartId, $counterpartName,
+        $invoiceId, $docId, $attachments, $isEdited, $editedBy, $editedById, $editedAt,
+        $editHistory, $isDeleted, $deletedBy, $deletedById, $deletedAt, $fiscalYearId,
+        $createdBy, $createdById
+    ]);
+}
+
+// تابع کمکی برای ثبت طرف‌حساب به صورت رابطه‌ای در جداول MySQL
+function saveSingleCounterpartRelationalPhp($pdo, $cp) {
+    if (!$cp || !is_array($cp)) return;
+    $id = !empty($cp['id']) ? strval($cp['id']) : 'cp_' . bin2hex(random_bytes(4));
+    $name = !empty($cp['name']) ? strval($cp['name']) : 'طرف حساب';
+    $phone = isset($cp['phone']) ? $cp['phone'] : null;
+    $address = isset($cp['address']) ? $cp['address'] : null;
+    $type = isset($cp['type']) ? $cp['type'] : 'both';
+    $acquaintanceMethod = isset($cp['acquaintanceMethod']) ? $cp['acquaintanceMethod'] : null;
+    $communicationChannel = isset($cp['communicationChannel']) ? $cp['communicationChannel'] : null;
+    $shippingMethod = isset($cp['shippingMethod']) ? $cp['shippingMethod'] : null;
+    $customIcons = isset($cp['customIcons']) ? (is_string($cp['customIcons']) ? $cp['customIcons'] : json_encode($cp['customIcons'], JSON_UNESCAPED_UNICODE)) : null;
+    $fiscalYearId = isset($cp['fiscalYearId']) ? $cp['fiscalYearId'] : null;
+    $createdBy = isset($cp['createdBy']) ? $cp['createdBy'] : null;
+    $createdById = isset($cp['createdById']) ? $cp['createdById'] : null;
+
+    $stmt = $pdo->prepare("INSERT INTO counterparts (id, name, phone, address, type, acquaintance_method, communication_channel, shipping_method, custom_icons, fiscal_year_id, created_by, created_by_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            phone = VALUES(phone),
+            address = VALUES(address),
+            type = VALUES(type),
+            acquaintance_method = VALUES(acquaintance_method),
+            communication_channel = VALUES(communication_channel),
+            shipping_method = VALUES(shipping_method),
+            custom_icons = VALUES(custom_icons),
+            fiscal_year_id = VALUES(fiscal_year_id),
+            updated_at = CURRENT_TIMESTAMP");
+    $stmt->execute([$id, $name, $phone, $address, $type, $acquaintanceMethod, $communicationChannel, $shippingMethod, $customIcons, $fiscalYearId, $createdBy, $createdById]);
+}
+
+// تابع کمکی برای ثبت حساب بانکی/صندوق به صورت رابطه‌ای در جداول MySQL
+function saveSingleAccountRelationalPhp($pdo, $acc) {
+    if (!$acc || !is_array($acc)) return;
+    $id = !empty($acc['id']) ? strval($acc['id']) : 'acc_' . bin2hex(random_bytes(4));
+    $name = !empty($acc['name']) ? strval($acc['name']) : 'حساب';
+    $accountNumber = isset($acc['accountNumber']) ? $acc['accountNumber'] : null;
+    $type = isset($acc['type']) ? $acc['type'] : 'bank';
+    $balance = isset($acc['balance']) ? floatval($acc['balance']) : 0;
+    $cardNumber = isset($acc['cardNumber']) ? $acc['cardNumber'] : null;
+    $shebaNumber = isset($acc['shebaNumber']) ? $acc['shebaNumber'] : null;
+    $bankName = isset($acc['bankName']) ? $acc['bankName'] : null;
+    $branch = isset($acc['branch']) ? $acc['branch'] : null;
+    $description = isset($acc['description']) ? $acc['description'] : null;
+    $fiscalYearId = isset($acc['fiscalYearId']) ? $acc['fiscalYearId'] : null;
+    $createdBy = isset($acc['createdBy']) ? $acc['createdBy'] : null;
+
+    $stmt = $pdo->prepare("INSERT INTO accounts (id, name, account_number, type, balance, card_number, sheba_number, bank_name, branch, description, fiscal_year_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            account_number = VALUES(account_number),
+            type = VALUES(type),
+            balance = VALUES(balance),
+            card_number = VALUES(card_number),
+            sheba_number = VALUES(sheba_number),
+            bank_name = VALUES(bank_name),
+            branch = VALUES(branch),
+            description = VALUES(description),
+            fiscal_year_id = VALUES(fiscal_year_id),
+            updated_at = CURRENT_TIMESTAMP");
+    $stmt->execute([$id, $name, $accountNumber, $type, $balance, $cardNumber, $shebaNumber, $bankName, $branch, $description, $fiscalYearId, $createdBy]);
+}
+
+// تابع مسیریابی ذخیره کلیدهای مختلف به جداول متناظر رابطه‌ای در PHP جهت حفظ همگام‌سازی دیتابیس
+function routeEntityWriteToRelationalPhp($pdo, $cleanKey, $data) {
+    if (!$pdo) return;
+    try {
+        switch ($cleanKey) {
+            case 'invoices':
+            case 'proformas': {
+                if (is_array($data)) {
+                    if (count($data) > 0 && isset($data[0]) && is_array($data[0])) {
+                        foreach ($data as $itm) saveSingleInvoiceRelationalPhp($pdo, $itm);
+                    } else {
+                        saveSingleInvoiceRelationalPhp($pdo, $data);
+                    }
+                }
+                break;
+            }
+            case 'transactions': {
+                if (is_array($data)) {
+                    if (count($data) > 0 && isset($data[0]) && is_array($data[0])) {
+                        foreach ($data as $itm) saveSingleTransactionRelationalPhp($pdo, $itm);
+                    } else {
+                        saveSingleTransactionRelationalPhp($pdo, $data);
+                    }
+                }
+                break;
+            }
+            case 'items': {
+                if (is_array($data)) {
+                    if (count($data) > 0 && isset($data[0]) && is_array($data[0])) {
+                        foreach ($data as $itm) saveSingleItemRelationalPhp($pdo, $itm);
+                    } else {
+                        saveSingleItemRelationalPhp($pdo, $data);
+                    }
+                }
+                break;
+            }
+            case 'counterparts': {
+                if (is_array($data)) {
+                    if (count($data) > 0 && isset($data[0]) && is_array($data[0])) {
+                        foreach ($data as $itm) saveSingleCounterpartRelationalPhp($pdo, $itm);
+                    } else {
+                        saveSingleCounterpartRelationalPhp($pdo, $data);
+                    }
+                }
+                break;
+            }
+            case 'accounts': {
+                if (is_array($data)) {
+                    if (count($data) > 0 && isset($data[0]) && is_array($data[0])) {
+                        foreach ($data as $itm) saveSingleAccountRelationalPhp($pdo, $itm);
+                    } else {
+                        saveSingleAccountRelationalPhp($pdo, $data);
+                    }
+                }
+                break;
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error in routeEntityWriteToRelationalPhp for key '{$cleanKey}': " . $e->getMessage());
+    }
+}
+
 // تابع کمکی برای ذخیره کردن داده‌های یک کلید خاص در MySQL (با ادغام اتمیک و رفع تداخل)
 function saveKeyData($pdo, $key, $data, $forceOverwrite = false) {
     if (!$pdo) {
@@ -2595,7 +3112,22 @@ function saveKeyData($pdo, $key, $data, $forceOverwrite = false) {
     // کاربران و لیست‌های داده‌ای همواره به صورت اتمیک و مستقیم ذخیره می‌شوند تا حذف‌ها و ویرایش‌ها دقیقاً اعمال شوند
     $forceOverwrite = true;
 
+    $txActive = $pdo->inTransaction();
+    if (!$txActive) {
+        $pdo->beginTransaction();
+    }
+
     try {
+        // ثبت در جداول تفکیکی رابطه‌ای MySQL جهت تضمین همگام‌سازی و اعمال بلادرنگ محاسبات انبار
+        routeEntityWriteToRelationalPhp($pdo, $cleanKey, $finalData);
+
+        if ($cleanKey === 'items') {
+            $freshItems = getFreshItemsFromDb($pdo);
+            if (!empty($freshItems)) {
+                $finalData = $freshItems;
+            }
+        }
+
         $serialized = json_encode($finalData, JSON_UNESCAPED_UNICODE);
         $stmt = $pdo->prepare("INSERT INTO app_state (state_key, state_value) VALUES (:key, :val) 
             ON DUPLICATE KEY UPDATE state_value = VALUES(state_value), updated_at = CURRENT_TIMESTAMP");
@@ -2603,8 +3135,22 @@ function saveKeyData($pdo, $key, $data, $forceOverwrite = false) {
             ':key' => $cleanKey,
             ':val' => $serialized
         ]);
+
+        if ($cleanKey === 'items') {
+            $stmt->execute([
+                ':key' => 'acc_app_items',
+                ':val' => $serialized
+            ]);
+        }
+
+        if (!$txActive) {
+            $pdo->commit();
+        }
         return ['success' => true, 'version' => $now, 'key' => $cleanKey];
     } catch (Exception $e) {
+        if (!$txActive && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         return ['success' => false, 'error' => $e->getMessage(), 'version' => $now, 'key' => $cleanKey];
     }
 }
@@ -2991,6 +3537,7 @@ switch ($route) {
         break;
 
     case 'db/key':
+    case 'db/load-key':
         $key = isset($_GET['key']) ? trim($_GET['key']) : '';
         if (empty($key)) {
             http_response_code(400);
@@ -4617,7 +5164,7 @@ switch ($route) {
                         type = VALUES(type),
                         color = VALUES(color),
                         unit = VALUES(unit),
-                        qty = VALUES(qty),
+                        qty = qty + (VALUES(initial_qty) - initial_qty),
                         initial_qty = VALUES(initial_qty),
                         last_purchase_price = VALUES(last_purchase_price),
                         last_sale_price = VALUES(last_sale_price),
@@ -4878,7 +5425,7 @@ switch ($route) {
                     type = VALUES(type),
                     color = VALUES(color),
                     unit = VALUES(unit),
-                    qty = VALUES(qty),
+                    qty = qty + (VALUES(initial_qty) - initial_qty),
                     initial_qty = VALUES(initial_qty),
                     last_purchase_price = VALUES(last_purchase_price),
                     last_sale_price = VALUES(last_sale_price),

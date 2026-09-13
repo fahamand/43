@@ -150,7 +150,8 @@ export function allocatePaymentToInvoices(
 export function calculateInvoiceBalances(
   invoice: Invoice,
   allAllocations: PaymentAllocation[] = [],
-  _transactions: BankTransaction[] = []
+  _transactions: BankTransaction[] = [],
+  pendingDeposits: PendingDeposit[] = []
 ): InvoiceBalanceResult {
   const totalAmount = Math.round(Number(invoice.totalAmount) || 0);
   const invoiceId = invoice.id;
@@ -165,9 +166,16 @@ export function calculateInvoiceBalances(
   const allocationSum = matchingAllocations.reduce((sum, a) => sum + (Number(a.allocatedAmount) || 0), 0);
   const roundedAllocationSum = Math.round(allocationSum);
 
+  // Calculate pending deposit sum for this invoice
+  const pendingPdSum = (pendingDeposits || [])
+    .filter(pd => !pd.isDeleted && pd.invoiceId === invoiceId && pd.status === 'pending')
+    .reduce((sum, pd) => sum + (Number(pd.amount) || 0), 0);
+
+  const clearedDepositAmount = Math.max(0, depositAmount - pendingPdSum);
+
   // Prevent double-counting of deposit and bank allocations for the same payment
   // by taking the maximum of deposit and recorded allocations
-  const paidAmount = Math.max(depositAmount, roundedAllocationSum);
+  const paidAmount = Math.max(clearedDepositAmount, roundedAllocationSum);
 
   const remainingAmount = Math.max(0, totalAmount - paidAmount);
   const overpaidAmount = Math.max(0, paidAmount - totalAmount);

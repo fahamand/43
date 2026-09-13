@@ -77,6 +77,13 @@ export default function TransactionsManual({
 }: TransactionsManualProps) {
   const [activeForm, setActiveForm] = useState<'cost' | 'deposit' | 'withdrawal' | 'settlement' | 'receivableSettlement' | 'transfer' | 'loan'>('cost');
   const [users, setUsers] = useState<User[]>([]);
+
+  React.useEffect(() => {
+    if (pendingDeposits) {
+      (window as any).__pendingDeposits = pendingDeposits;
+    }
+  }, [pendingDeposits]);
+
   React.useEffect(() => {
     const loadUsersList = async () => {
       try {
@@ -1575,7 +1582,9 @@ export default function TransactionsManual({
           date,
           'bank_transfer',
           newTx.id,
-          pendingDeposits
+          pendingDeposits,
+          targetSelectedInvs.map(inv => inv.id),
+          selectedPendingDepositId || undefined
         );
         generatedAllocations = allocations;
 
@@ -1587,15 +1596,22 @@ export default function TransactionsManual({
             invoiceId: alloc.invoiceId,
             allocations: [{
               id: `alloc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-              date: alloc.date,
-              amount: alloc.amount,
-              method: alloc.method,
+              paymentId: newTx.id,
+              invoiceId: alloc.invoiceId,
+              invoiceNumber: alloc.invoiceNumber,
+              counterpartId: firstInv.counterpartId || '',
+              counterpartName: firstInv.counterpartName || '',
+              allocatedAmount: Number(alloc.amount) || 0,
+              allocationDate: alloc.date || date,
+              paymentMethod: alloc.method || 'bank_transfer',
               reference: alloc.reference,
-              status: 'cleared',
+              status: 'valid',
               clearedTxId: newTx.id,
               clearedDate: date
             }]
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error('Failed to sync payment allocation:', err);
+          });
         });
       }
 
